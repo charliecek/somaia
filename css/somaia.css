@@ -1,0 +1,233 @@
+code {
+  color: inherit;
+  background-color: inherit;
+}
+.clear {
+  clear: both;
+}
+.somPointsStyle{
+  color: green;
+}
+.inputPointsStyle{
+  color: red;
+  opacity: 0.75;
+}
+.canvasWrapper p.header {
+  float: left;
+  margin: 7px 0 17px 0;
+  font-weight: bold;
+  font-style: italic;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.canvasWrapper p.header span {
+  max-width: 100%;
+}
+.canvasWrapper p.header:hover {
+  white-space: normal;
+}
+.canvasWrapper p.button {
+  width: 40%;
+  float: right;
+  text-align: right;
+}
+canvas {
+  width: 100%;
+  border: 1px solid black;
+  background-color: white;
+}
+.canvasWrapper canvas{
+  width: 49%;
+}
+.hitMapCanvasWrapper {
+  position: relative;
+  display: inline-block;
+  width: 49%;
+}
+.hitMapCanvasWrapper canvas,
+.changeRateCanvasWrapper canvas,
+.neighbourhoodRadiusCanvasWrapper canvas {
+  width: 100%;
+}
+.floatingPointLabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: black;
+  background-color: lightyellow;
+  border: 1px solid orange;
+  padding: 2px;
+  min-width: 8em;
+  z-index: 99999999;
+}
+.tooltip:hover {
+  z-index: 9999999;
+}
+.tooltip:hover .tooltip-inner {
+  background-color: grey;
+}
+.tooltip:hover .tooltip-arrow {
+  border-bottom-color: grey;
+  border-top-color: grey;
+}
+/* Tab-specific */
+.inputSelectorWrapper {
+  width: 35%;
+  float: left;
+  padding: 1em 0;
+  display: table;
+}
+.canvasWrapper {
+  width: 65%;
+  padding: 1%;
+  float: right;
+}
+.somTrainingHeader {
+  width: 30%;
+  display: inline-block;
+}
+.somTrainingHeader label {
+    font-weight: normal;
+    float: right;
+}
+.header label{
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+p.showBmuAndNeighbourhoodCheckboxP.header {
+    width: 28%;
+    display: inline-block;
+    float: right;
+    text-align: right;
+}
+
+/* Tabbed content */
+body,html {
+  height: 100%;
+}
+body.disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+.mainHeader {
+  min-height: 75px;
+  position: relative;
+}
+.tabContainer {
+  min-height: calc(100% - 75px); 
+}
+.nav-pills {
+  min-height: 40px;
+}
+.nav-pills > li > a {
+  border-radius: 4px 4px 0 0 ;
+}
+.tab-content {
+  color : white;
+  background-color: #428bca;
+  padding : 5px 15px;
+  min-height: calc(100vh - 40px - 75px);
+}
+
+/* Bootstrap sliders */
+#sat_historySlider,
+#sat_historySlider_tab2,
+#sat_historySlider_tab3,
+#sat_historySlider_tab4 {
+  width: calc(100% - 30px);
+  float: right;
+}
+#sat_historySlider .slider-selection,
+#sat_historySlider_tab2 .slider-selection,
+#sat_historySlider_tab3 .slider-selection,
+#sat_historySlider_tab3 .slider-selection {
+  background: #BABABA;
+}
+.constSliderRow {
+  display: table-row;
+}
+.constSliderWrapper {
+  width: 97%;
+  margin: 1.2em 1%;
+  float: left;
+  display: table-cell;
+}
+.constSliderWrapper label {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 26em;
+}
+.constSliderWrapper label:hover {
+  white-space: normal;
+}
+#const_LearningRate_0Slider, #const_maxIterationsSlider, #const_somHSlider, #const_somInitRangeSlider, #const_changeRateThresholdSlider,
+#const_LearningRate_0Slider_tab2, #const_maxIterationsSlider_tab2, #const_somHSlider_tab2, #const_somInitRangeSlider_tab2, #const_changeRateThresholdSlider_tab2,
+#const_LearningRate_0Slider_tab3, #const_maxIterationsSlider_tab3, #const_somHSlider_tab3, #const_somInitRangeSlider_tab3, #const_changeRateThresholdSlider_tab3,
+#const_LearningRate_0Slider_tab4, #const_maxIterationsSlider_tab4, #const_somHSlider_tab4, #const_somInitRangeSlider_tab4, #const_changeRateThresholdSlider_tab4,.multiselect-native-select, .multiselect-native-select .btn-group, .multiselect-native-select .btn-group button.multiselect,
+.constSliderWrapper .btn-group, .constSliderWrapper .btn-group button.multiselect {
+  width: 100%;
+}
+.counter span {
+  margin-left: 10px;
+}
+.counter:hover {
+  cursor: auto;
+}
+.constSliderWrapper .btn-group ul li span.col-square,
+.constSliderWrapper .btn-group .multiselect-selected-text span.col-square {
+  padding: 1px 3px;
+}
+.multiselect-container.dropdown-menu {
+  z-index: 2000;
+}
+.const_InputColors_tab2 .multiselect-item.regular:not(.multiselect-all) {
+  display: inline-block;
+}
+.const_InputColors_tab2 .multiselect-item.regular:not(.multiselect-all) a {
+  margin: 0 1px;
+}
+.const_InputColors_tab2 .multiselect-item.regular:not(.multiselect-all) a label {
+  padding: 20px;
+}
+.const_InputColors_tab2 .multiselect-item.regular:not(.multiselect-all) a label:hover {
+  white-space: nowrap;
+}
+.const_InputColors_tab2 .multiselect-item.regular:not(.multiselect-all) input[type=checkbox] {
+  visibility: hidden;
+}
+.historyImgContainer {
+  width: 100%;
+}
+.historyImgContainer img {
+  width: 8%;
+  margin: 1%;
+  cursor: pointer;
+  background-color: white;
+}
+.historyImgContainer img.disabled {
+  cursor: not-allowed;
+}
+.historyImgContainer img.active {
+  border: 2px solid darkgray;
+  margin: calc(1% - 2px);
+}
+
+.changeRateCanvasWrapper, .neighbourhoodRadiusCanvasWrapper{
+  float: left;
+  margin: 1%;
+  width: 98%;
+}
+.changeRateCanvasWrapper h5,
+.neighbourhoodRadiusCanvasWrapper h5 {
+  width: 100%;
+}
+#language_switcher {
+  width: 10em;
+  float: right;
+  position: absolute;
+  top: 1em;
+  right: 15px;
+}

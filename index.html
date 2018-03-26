@@ -1,0 +1,3907 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Samoorganizujúce sa mapy a ich aplikácie</title>
+  <!-- Math.js -->
+  <script src="js/math.js" type="text/javascript"></script>
+  <!-- PaperJS -->
+  <script src="js/paper-full.js" type="text/javascript"></script>
+  <!-- jQuery -->
+  <script src="js/jquery.min.js" type="text/javascript"></script>
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  <!-- Font awesome -->
+  <link rel="stylesheet" href="css/font-awesome.min.css">
+  <!-- Bootstrap slider https://github.com/seiyria/bootstrap-slider -->
+  <script src="js/bootstrap-slider.min.js" type="text/javascript"></script>
+  <link rel="stylesheet" href="css/bootstrap-slider.min.css">
+  <!-- Bootstrap multiselect -->
+  <script type="text/javascript" src="js/bootstrap-multiselect.js"></script>
+  <link rel="stylesheet" href="css/bootstrap-multiselect.css" type="text/css"/>
+  <!-- Local styling -->
+  <link rel="stylesheet" href="css/somaia.css">
+  <!-- Local Global JS -->
+  <script src="js/data.js" type="text/javascript"></script>
+  <script src="js/somaia.js" type="text/javascript"></script>
+  <!-- lz-string text compression -->
+  <script type="text/javascript" src="js/lz-string.min.js"></script>
+  <script src="js/cryptojs/rollups/md5.js"></script>
+  
+  <script type="text/paperscript" canvas="somTraining">
+    tab1.somTraining = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer
+    };
+    var sizeArgs = {
+      sizeX: 500,
+      sizeY: 500,
+      scaleX: 100,
+      scaleY: 100,
+      radius: 10
+    };
+    var size;
+
+    function sat_plotInput() {
+      size = getCanvasSize("tab1", sizeArgs);
+      view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+      var ptCoordinateGrid = [];
+      var ptGrid = {};
+      for (var i = 0; i < tab1.inputVectorCount; i++) {
+        // var coordinateArray = math.squeeze(tab1.inputMatrix.subset(math.index(i, [0,1]))).toArray();
+        var coordinateArray = tab1.inputMatrix[i];
+        var x = coordinateArray[0];
+        var y = coordinateArray[1];
+        ptCoordinateGrid[i] = [x*size.scaleX, y*size.scaleY];
+        ptGrid[i] = new Path.Circle({
+          center: [x*size.scaleX, y*size.scaleY],
+          radius: size.radius,
+          fillColor: 'red',
+          opacity: 0.75
+        })
+      }
+      tab1.sat_inCoordinatePtGrid = ptCoordinateGrid;
+      return ptGrid;
+    }
+    function sat_plotSomInit() {
+      var ptGrid = {};
+      for (var i = 0; i < tab1.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab1.somH; j++) {
+          // var coordinateArray = math.squeeze(tab1.som.subset(math.index(i,j,[0,1]))).toArray();
+          var coordinateArray = tab1.som[i][j];
+          var x = coordinateArray[0];
+          var y = coordinateArray[1];
+          ptGrid[i][j] = new Path.Circle({
+            center: [x*size.scaleX, y*size.scaleY],
+            radius: size.radius,
+            fillColor: 'green',
+            opacity: 1
+          })
+        }
+      }
+      return ptGrid;
+    }
+    function sat_plotSomPts() {
+      for (var i = 0; i < tab1.somW; i++) {
+        for (var j = 0; j < tab1.somH; j++) {
+          // var currentNodeVectorArray = math.squeeze(tab1.som.subset(math.index(i,j,[0,1]))).toArray();
+          var currentNodeVectorArray = tab1.som[i][j];
+          var x = currentNodeVectorArray[0];
+          var y = currentNodeVectorArray[1];
+          tab1.sat_somPtGrid[i][j].position.x = x*size.scaleX;
+          tab1.sat_somPtGrid[i][j].position.y = y*size.scaleY;
+        }
+      }
+    }
+    function sat_saveHistory(iter) {
+      tab1.sat_somPtGridHistory[iter] = {};
+      for (var i = 0; i < tab1.somW; i++) {
+        tab1.sat_somPtGridHistory[iter][i] = {};
+        for (var j = 0; j < tab1.somH; j++) {
+          tab1.sat_somPtGridHistory[iter][i][j] = {
+            x: tab1.sat_somPtGrid[i][j].position.x,
+            y: tab1.sat_somPtGrid[i][j].position.y
+          };
+        }
+      }
+    }
+    function sat_plotSomFromHistory(ptGrid) {
+      for (var i = 0; i < tab1.somW; i++) {
+        for (var j = 0; j < tab1.somH; j++) {
+          tab1.sat_somPtGrid[i][j].position.x = ptGrid[i][j].x;
+          tab1.sat_somPtGrid[i][j].position.y = ptGrid[i][j].y;
+        }
+      }
+    }
+    function sat_destroyPoints() {
+      for (var j = 0; j < Object.size(tab1.sat_inPtGrid); j++) {
+        tab1.sat_inPtGrid[j].remove();
+      }
+      for (var i = 0; i < Object.size(tab1.sat_somPtGrid); i++) {
+        for (var j = 0; j < Object.size(tab1.sat_somPtGrid[i]); j++) {
+          tab1.sat_somPtGrid[i][j].remove();
+        }
+      }
+    }
+    function sat_plotInputFromHistory(size) {
+      var ptGrid = {};
+      for (var i = 0; i < tab1.inputVectorCount; i++) {
+        var coordinateArray = tab1.sat_inCoordinatePtGrid[i];
+        var x = coordinateArray.x || coordinateArray[0];
+        var y = coordinateArray.y || coordinateArray[1];
+        ptGrid[i] = new Path.Circle({
+          center: [x, y],
+          radius: size.radius,
+          fillColor: 'red',
+          opacity: 0.75
+        })
+      }
+      return ptGrid;
+    }
+    function sat_plotSomInitFromHistory(size) {
+      var maxIter = tab1.somIteration - 2;
+      var ptCoordinateGrid = tab1.sat_somPtGridHistory[maxIter];
+
+      var ptGrid = {};
+      for (var i = 0; i < tab1.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab1.somH; j++) {
+          var coordinateArray = ptCoordinateGrid[i][j];
+          var x = coordinateArray.x;
+          var y = coordinateArray.y;
+          
+          ptGrid[i][j] = new Path.Circle({
+            center: [x, y],
+            radius: size.radius,
+            fillColor: 'green',
+            opacity: 1
+          })
+        }
+      }
+      return ptGrid;
+    }
+    
+    tab1.sat_inPtGrid = sat_plotInput();
+    tab1.sat_somPtGrid = sat_plotSomInit();
+    sat_saveHistory(0);
+
+    function onFrame(event) {
+      if (typeof tab1.initFromHistory === "boolean" && tab1.initFromHistory === true) {
+        sat_destroyPoints();
+        
+        tab1.sat_inPtGrid = sat_plotInputFromHistory(size);
+        tab1.sat_somPtGrid = sat_plotSomInitFromHistory(size);
+        tab1.initFromHistory = false;
+        if ("undefined" !== typeof tab1.hitMapPaper.redraw) {
+          tab1.hitMapPaper.redraw(tab1.somIteration - 2);
+        }
+        if ("undefined" !== typeof tab1.changeRatePaper.clear) {
+          tab1.changeRatePaper.clear();
+        }
+        if ("undefined" !== typeof tab1.changeRatePaper.redraw) {
+          tab1.changeRatePaper.redraw();
+        }
+        if ("undefined" !== typeof tab1.neighbourhoodRadiusPaper.clear) {
+          tab1.neighbourhoodRadiusPaper.clear();
+        }
+        if ("undefined" !== typeof tab1.neighbourhoodRadiusPaper.redraw) {
+          tab1.neighbourhoodRadiusPaper.redraw();
+        }
+        var bmu = tab1.bmuHistory[tab1.somIteration - 2];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab1");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab1");
+        }
+        return
+      }
+      if (typeof tab1.showHistoryIteration === "number" && tab1.showHistoryIteration >= 0) {
+        if ("undefined" !== typeof tab1.hitMapPaper.redraw) {
+          tab1.hitMapPaper.redraw(tab1.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab1.changeRatePaper.showIteration) {
+          tab1.changeRatePaper.showIteration(tab1.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab1.neighbourhoodRadiusPaper.showIteration) {
+          tab1.neighbourhoodRadiusPaper.showIteration(tab1.showHistoryIteration);
+        }
+        var historyPtGrid = tab1.sat_somPtGridHistory[tab1.showHistoryIteration];
+        if ("undefined" === typeof historyPtGrid) {
+          tab1.showHistoryIteration = false;
+          return;
+        }
+        sat_plotSomFromHistory(historyPtGrid);
+        var bmu = tab1.bmuHistory[tab1.showHistoryIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab1");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab1");
+        }
+        tab1.showHistoryIteration = false;
+        return;
+      }
+      if (tab1.somIteration === 2) {
+        $("#resetSomButton").removeAttr("disabled");
+        $("#trainStopSomButton").removeAttr("disabled");
+      }
+      if (tab1.somIteration === tab1.maxIterations + 1 || tab1.learningJustFinished) {
+        $("#trainSomButton").attr('disabled', 'disabled');
+        $("#trainStopSomButton").attr('disabled', 'disabled');
+        $("#sat_historySliderInput").slider("enable");
+        $("#tab1 .somConstants").slider("enable");
+        $("#tab1 .inputSelectorWrapper select").removeAttr("disabled");
+        $("#tab1 select[multiple=multiple]").multiselect("enable");
+        $("#tab1 .historyImgContainer img").removeClass("disabled");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").addClass("disabled");
+        saveToLocalStorageHistory("tab1");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").removeClass("disabled");
+        tab1.learningFinished = true;
+        tab1.doIterate = false;
+        tab1.learningJustFinished = false;
+        tab1.somIteration++;
+      }
+      if (tab1.somIteration > tab1.maxIterations || tab1.learningFinished) {
+        return;
+      }
+      if (tab1.resetJustDone) {
+        tab1.resetJustDone = false;
+        tab1.doIterate = false;
+        sat_destroyPoints();
+        tab1.sat_inPtGrid = sat_plotInput();
+        tab1.sat_somPtGrid = sat_plotSomInit();
+        tab1.sat_somPtGridHistory = [];
+        sat_saveHistory(0);
+      } else {
+        var doIterateLoc = tab1.doIterate || false;
+        if (doIterateLoc === false) {
+          return;
+        }
+        SomAlgorithmIterationStep(tab1.somIteration);
+        sat_plotSomPts();
+        if ("undefined" !== typeof tab1.hitMapPaper.redraw) {
+          tab1.hitMapPaper.redraw(tab1.somIteration);
+        }
+        var bmu = tab1.bmuHistory[tab1.somIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab1");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab1");
+        }
+        sat_saveHistory(tab1.somIteration);
+        $("#counter span").html(tab1.somIteration);
+        tab1.somIteration++;
+        $('#sat_historySliderInput')
+            .slider('setAttribute', 'value', tab1.somIteration - 1)
+            .slider('setAttribute', 'max', tab1.somIteration - 1)
+            .slider('refresh');
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="hitMap">
+    tab1.hitMapPaper = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer,
+      iteration: undefined
+    };
+    tab1.hitMapPaper.sizeArgs = {};
+    tab1.hitMapPaper.group = new Group();
+
+    tab1.hitMapPaper.init = function() {
+      // clear the old grid //
+      if ("undefined" !== typeof tab1.hitMapPaper.grid && tab1.hitMapPaper.grid.length > 0) {
+        for (var i = 0; i < tab1.hitMapPaper.grid.length; i++) {
+          for (var j = 0; j < tab1.hitMapPaper.grid[i].length; j++) {
+            tab1.hitMapPaper.grid[i][j].remove();
+          }
+        }
+      }
+      
+      // draw a new grid //
+      tab1.hitMapPaper.size = getCanvasSize("tab1", tab1.hitMapPaper.sizeArgs);
+      view.viewSize = new paper.Size(tab1.hitMapPaper.size.sizeX, tab1.hitMapPaper.size.sizeY);
+      tab1.hitMapPaper.size.sideLength = tab1.hitMapPaper.size.sizeX / tab1.somW;
+      tab1.hitMapPaper.size.hex = {};
+      tab1.hitMapPaper.size.hex.countW = tab1.somW + 0.5;
+      tab1.hitMapPaper.size.hex.width = tab1.hitMapPaper.size.sizeX / tab1.hitMapPaper.size.hex.countW;
+      tab1.hitMapPaper.size.hex.radius = tab1.hitMapPaper.size.hex.width / math.sqrt(3);
+      tab1.hitMapPaper.size.hex.heightSum = (tab1.somH % 2 === 0)
+        ? tab1.somH*tab1.hitMapPaper.size.hex.radius*3/2+tab1.hitMapPaper.size.hex.radius/2
+        : math.floor(tab1.somH/2)*3*tab1.hitMapPaper.size.hex.radius+tab1.hitMapPaper.size.hex.radius*5/2;
+      tab1.hitMapPaper.size.hex.offsetX = tab1.hitMapPaper.size.hex.radius;
+      tab1.hitMapPaper.size.hex.offsetY = tab1.hitMapPaper.size.hex.radius + (tab1.hitMapPaper.size.sizeY - tab1.hitMapPaper.size.hex.heightSum)/2;
+      
+      var ptGrid = [];
+      for (var i = 0; i < tab1.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab1.somH; j++) {
+          if (tab1.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab1.hitMapPaper.size.hex.width + tab1.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab1.hitMapPaper.size.hex.radius*3/2 + tab1.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab1.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab1.hitMapPaper.size.hex.radius // radius
+            );
+          } else {
+            var rectangle = new Rectangle(i*tab1.hitMapPaper.size.sideLength, j*tab1.hitMapPaper.size.sideLength, tab1.hitMapPaper.size.sideLength, tab1.hitMapPaper.size.sideLength);
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.strokeColor = "grey";
+          path.strokeWidth = 1;
+          ptGrid[i][j] = path;
+          tab1.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab1.hitMapPaper.grid = ptGrid;
+    }
+    
+    tab1.hitMapPaper.clear = function() {
+      if ("undefined" !== typeof tab1.hitMapPaper.hitMapPts && tab1.hitMapPaper.hitMapPts.length > 0) {
+        for (var i = 0; i < tab1.hitMapPaper.hitMapPts.length; i++) {
+          for (var j = 0; j < tab1.hitMapPaper.hitMapPts[i].length; j++) {
+            if ("undefined" !== typeof tab1.hitMapPaper.hitMapPts[i][j]) {
+              tab1.hitMapPaper.hitMapPts[i][j].remove();
+            }
+          }
+        }
+      }
+    }
+    tab1.hitMapPaper.draw = function(iteration) {
+      if ("undefined" === typeof tab1.hitMapHistory || "undefined" === typeof tab1.hitMapHistory[iteration]) {
+        console.warn("No hitMapHistory for iteration "+iteration);
+        return;
+      }
+      tab1.hitMapPaper.iteration = iteration;
+      var hitMapMax = math.max(tab1.hitMapHistory[iteration].counts);
+      var ptGrid = [];
+      for (var i = 0; i < tab1.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab1.somH; j++) {
+          var hitMapCount = tab1.hitMapHistory[iteration].counts[i][j];
+          if (hitMapCount === 0) {
+            continue;
+          }
+          var scaling = hitMapCount / hitMapMax;
+          if (tab1.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab1.hitMapPaper.size.hex.width + tab1.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab1.hitMapPaper.size.hex.radius*3/2 + tab1.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab1.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab1.hitMapPaper.size.hex.radius * scaling // radius
+            );
+          } else {
+            var offset = (tab1.hitMapPaper.size.sideLength - tab1.hitMapPaper.size.sideLength * scaling)/2;
+            var rectangle = new Rectangle(
+              i*tab1.hitMapPaper.size.sideLength + offset, j*tab1.hitMapPaper.size.sideLength + offset,
+              tab1.hitMapPaper.size.sideLength * scaling, tab1.hitMapPaper.size.sideLength * scaling
+            );
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.fillColor = "grey";
+          if ("undefined" !== typeof tab1.inputLabelColors) {
+            var cntMax = 0;
+            var maxLabels = [];
+            var hitCount = 0;
+            for (var l = 0; l < tab1.inputLabelColors._names.length; l++) {
+              var labelName = tab1.inputLabelColors._names[l];
+              var cnt = tab1.hitMapHistory[iteration].labelCounts[labelName][i][j];
+              if (cnt > 0 && cnt >= cntMax) {
+                if (cnt > cntMax) {
+                  maxLabels = [];
+                  cntMax = cnt;
+                }
+                maxLabels.push(labelName);
+                hitCount++;
+              } else if (cnt > 0) {
+                hitCount++;
+              }
+            }
+            if (maxLabels.length === 1) {
+              var labelName = maxLabels[0];
+              var labelColor = tab1.inputLabelColors[labelName];
+              if ("undefined" === typeof labelColor) {
+                console.log(labelName, tab1.inputLabelColors)
+              } else if (labelColor instanceof Array) {
+                path.fillColor = new Color(labelColor[0], labelColor[1], labelColor[2]);
+              } else {
+                path.fillColor = labelColor;
+              }
+              if (hitCount > 1) {
+                path.strokeWidth = 2;
+                path.strokeColor = "black";
+                path.dashArray = [5, 5];
+              }
+            }
+          } else {
+            path.fillColor = "orange";
+          }
+          path.opacity = 1;
+          ptGrid[i][j] = path;
+          tab1.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab1.hitMapPaper.hitMapPts = ptGrid;
+    }
+    tab1.hitMapPaper.redraw = function(iteration) {
+      tab1.hitMapPaper.clear();
+      tab1.hitMapPaper.draw(iteration);
+    }
+    tab1.hitMapPaper.init();
+    
+    function onMouseUp(event) {
+      $("#hitMap_tab1_CanvasWrapper .floatingPointLabel").remove();
+      var pts = tab1.hitMapPaper.grid;
+      if ("undefined" === typeof pts) {
+        return;
+      }
+      var pos = event.point;
+      var canvasWidth = $("#hitMap").width();
+      var scale = tab1.hitMapPaper.size.sizeX / canvasWidth;
+      if (tab1.GridDistanceType === "hexagonal_neighbourhood_2d") {
+        var r = tab1.hitMapPaper.size.hex.radius;
+      } else {
+        var r = tab1.hitMapPaper.size.sideLength / 2;
+      }
+      pos.x *= scale;
+      pos.y *= scale;
+      var usedLabels = {};
+      for (var i = 0; i < pts.length; i++) {
+        for (var j = 0; j < pts[i].length; j++) {
+          var ptPos = pts[i][j].position;
+          if (math.distance([pos.x, pos.y], [ptPos.x, ptPos.y]) < r) {
+            // Found the clicked node //
+            // Show the clicked node in the training canvas //
+            showClickedNode(i, j, "tab1", "orange", 3);
+            
+            // Show label //
+            var labelTexts = [];
+            if ("undefined" === typeof tab1.hitMapHistory.length === 0 || "undefined" === typeof tab1.hitMapHistory[tab1.hitMapPaper.iteration]) {
+              break;
+            }
+            if ("undefined" === typeof tab1.inputLabels) {
+              var cnt = tab1.hitMapHistory[tab1.hitMapPaper.iteration].counts[i][j];
+              if (cnt > 0) {
+                var language = $("#language_switcher").val().toLowerCase();
+                var languageID = lang_ids[language];
+                var dictionary = lang_strings;
+                if (dictionary.hasOwnProperty(languageID) && "undefined" !== typeof dictionary[languageID].count) {
+                  var countWord = dictionary[languageID].count;
+                } else {
+                  var countWord = "Počet";
+                }
+                labelTexts.push("<span data-translate=\"count\">" + countWord + "</span>: " + cnt);
+              }
+            } else {
+              for (var l = 0; l < tab1.inputLabels.length; l++) {
+                var labelName = tab1.inputLabels[l];
+                if ("undefined" !== typeof usedLabels[labelName]) {
+                  continue;
+                }
+                usedLabels[labelName] = true;
+                var cnt = tab1.hitMapHistory[tab1.hitMapPaper.iteration].labelCounts[labelName][i][j];
+                if (cnt > 0) {
+                  labelTexts.push(labelName + ": " + cnt);
+                }
+              }
+            }
+            if (labelTexts.length > 0) {
+              labelText = labelTexts.join("<br>\n");
+              tab1.hitMapPaper.ptLabel = $('<span class="floatingPointLabel">'+labelText+'</span>')
+                .appendTo($("#hitMap_tab1_CanvasWrapper"))
+                .css("top", +event.point.y)
+                .css("left", +event.point.x);
+              var curTabID = "tab1";
+              if ("undefined" === window[curTabID].labelTimeoutHandle) {
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              if (window[curTabID].labelTimeoutHandle !== false) {
+                clearTimeout(window[curTabID].labelTimeoutHandle);
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              window[curTabID].labelTimeoutHandle = setTimeout(function() {
+                $("#hitMap_"+curTabID+"_CanvasWrapper .floatingPointLabel").remove();
+              }, labelTimeout);
+            }
+            break;
+          }
+        }
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="changeRate">
+    tab1.changeRatePaper = {};
+    tab1.changeRatePaper.changeRatePoints = [];
+    tab1.changeRatePaper.height = 100;
+    tab1.changeRatePaper.width = 500;
+    view.viewSize = new paper.Size(tab1.changeRatePaper.width, tab1.changeRatePaper.height);
+    tab1.changeRatePaper.scaleY = 1;
+    tab1.changeRatePaper.scaleX = 1;
+    tab1.changeRatePaper.path = new Path();
+    tab1.changeRatePaper.path.strokeColor = 'red';
+    tab1.changeRatePaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab1.changeRatePaper.height));
+    tab1.changeRatePaper.verticalLine.strokeColor = 'black';
+    tab1.changeRatePaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab1.changeRatePaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab1.changeRatePaper.intersectionLabel.justification = 'center';
+    tab1.changeRatePaper.intersectionLabel.fillColor = 'black';
+    tab1.changeRatePaper.intersectionLabel.content = '';
+    tab1.changeRatePaper.intersectionLabel.fontSize = '14px';
+    
+    tab1.changeRatePaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      if ("number" === typeof content) {
+        if (content < 1) {
+          content = math.round(content, tab1.changeRateThreshold);
+        } else {
+          content = math.round(content, 2);
+        }
+      }
+      tab1.changeRatePaper.intersectionLabel.content = content;
+      tab1.changeRatePaper.intersectionLabel.position.x = x;
+      tab1.changeRatePaper.intersectionLabel.position.y = y;
+      var bounds = tab1.changeRatePaper.intersectionLabel.getBounds();
+      if (x > tab1.changeRatePaper.width/2) {
+        tab1.changeRatePaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab1.changeRatePaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab1.changeRatePaper.height/2) {
+        tab1.changeRatePaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab1.changeRatePaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    tab1.changeRatePaper.clear = function() {
+      tab1.changeRatePaper.verticalLine.position.x = 0;
+      while (tab1.changeRatePaper.path.segments.length > 0) {
+        tab1.changeRatePaper.path.segments[0].remove();
+      }
+      tab1.changeRatePaper.changeRatePoints = [];
+      tab1.changeRatePaper.intersection.position.x = 0;
+      tab1.changeRatePaper.intersection.position.y = 0;
+      tab1.changeRatePaper.setIntersectionLabel('', 0, 0);
+    }
+    tab1.changeRatePaper.redraw = function() {
+      tab1.changeRatePaper.clear();
+      tab1.changeRatePaper.max = math.max(tab1.changeRateHistory);
+      tab1.changeRatePaper.scaleX = tab1.changeRatePaper.width / tab1.maxIterations;
+      tab1.changeRatePaper.scaleY = tab1.changeRatePaper.height / tab1.changeRatePaper.max;
+      tab1.changeRatePaper.verticalLine.position.x = tab1.changeRatePaper.width;
+      for (var i = 0; i < tab1.changeRateHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab1.changeRatePaper.changeRatePoints[iter]
+            && "undefined" !== typeof tab1.changeRateHistory[iter]) {
+          var x = iter * tab1.changeRatePaper.scaleX;
+          var y = tab1.changeRatePaper.scaleY * (tab1.changeRatePaper.max - tab1.changeRateHistory[iter]);
+          tab1.changeRatePaper.path.add(new Point(x, y));
+          tab1.changeRatePaper.changeRatePoints[iter] = iter;
+          tab1.changeRatePaper.verticalLine.position.x = x;
+          tab1.changeRatePaper.intersection.position.x = x;
+          tab1.changeRatePaper.intersection.position.y = y;
+          tab1.changeRatePaper.setIntersectionLabel(
+            tab1.changeRateHistory[iter],
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab1.changeRatePaper.showIteration = function(iteration) {
+      tab1.changeRatePaper.verticalLine.position.x = iteration * tab1.changeRatePaper.scaleX;
+      var intersections = tab1.changeRatePaper.verticalLine.getIntersections(tab1.changeRatePaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab1.changeRatePaper.intersection.position.x = intersections[0].point.x;
+        tab1.changeRatePaper.intersection.position.y = intersections[0].point.y;
+        tab1.changeRatePaper.setIntersectionLabel(
+          tab1.changeRateHistory[iteration],
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab1.doIterate) {
+          return;
+        }
+        if (tab1.changeRateHistory.length > 1) {
+          tab1.changeRatePaper.max = math.max(tab1.changeRateHistory);
+          tab1.changeRatePaper.scaleX = tab1.changeRatePaper.width / tab1.maxIterations;
+          tab1.changeRatePaper.scaleY = tab1.changeRatePaper.height / tab1.changeRatePaper.max;
+//           var iter = tab1.somIteration - 1;
+          for (var iter = tab1.changeRatePaper.changeRatePoints.length - 1; iter < tab1.changeRateHistory.length; iter++) {
+            if ("undefined" === typeof tab1.changeRatePaper.changeRatePoints[iter]
+                && "undefined" !== typeof tab1.changeRateHistory[iter]) {
+              var x = iter * tab1.changeRatePaper.scaleX;
+              var y = tab1.changeRatePaper.scaleY * (tab1.changeRatePaper.max - tab1.changeRateHistory[iter]);
+              tab1.changeRatePaper.verticalLine.position.x = x;
+              tab1.changeRatePaper.path.add(new Point(x, y));
+              tab1.changeRatePaper.changeRatePoints[iter] = iter;
+              tab1.changeRatePaper.intersection.position.x = x;
+              tab1.changeRatePaper.intersection.position.y = y;
+              tab1.changeRatePaper.setIntersectionLabel(
+                tab1.changeRateHistory[iter],
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="neighbourhoodRadius">
+    tab1.neighbourhoodRadiusPaper = {};
+    tab1.neighbourhoodRadiusPaper.points = [];
+    tab1.neighbourhoodRadiusPaper.height = 100;
+    tab1.neighbourhoodRadiusPaper.width = 500;
+    view.viewSize = new paper.Size(tab1.neighbourhoodRadiusPaper.width, tab1.neighbourhoodRadiusPaper.height);
+    tab1.neighbourhoodRadiusPaper.scaleY = 1;
+    tab1.neighbourhoodRadiusPaper.scaleX = 1;
+    tab1.neighbourhoodRadiusPaper.path = new Path();
+    tab1.neighbourhoodRadiusPaper.path.strokeColor = 'red';
+//     tab1.neighbourhoodRadiusPaper.verticalLine = new Path();
+    tab1.neighbourhoodRadiusPaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab1.neighbourhoodRadiusPaper.height));
+    tab1.neighbourhoodRadiusPaper.verticalLine.strokeColor = 'black';
+    tab1.neighbourhoodRadiusPaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab1.neighbourhoodRadiusPaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab1.neighbourhoodRadiusPaper.intersectionLabel.justification = 'center';
+    tab1.neighbourhoodRadiusPaper.intersectionLabel.fillColor = 'black';
+    tab1.neighbourhoodRadiusPaper.intersectionLabel.content = '';
+    tab1.neighbourhoodRadiusPaper.intersectionLabel.fontSize = '14px';
+    
+    tab1.neighbourhoodRadiusPaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      tab1.neighbourhoodRadiusPaper.intersectionLabel.content = content;
+      tab1.neighbourhoodRadiusPaper.intersectionLabel.position.x = x;
+      tab1.neighbourhoodRadiusPaper.intersectionLabel.position.y = y;
+      var bounds = tab1.neighbourhoodRadiusPaper.intersectionLabel.getBounds();
+      if (x > tab1.neighbourhoodRadiusPaper.width/2) {
+        tab1.neighbourhoodRadiusPaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab1.neighbourhoodRadiusPaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab1.neighbourhoodRadiusPaper.height/2) {
+        tab1.neighbourhoodRadiusPaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab1.neighbourhoodRadiusPaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab1.neighbourhoodRadiusPaper.clear = function() {
+      tab1.neighbourhoodRadiusPaper.verticalLine.position.x = 0;
+      while (tab1.neighbourhoodRadiusPaper.path.segments.length > 0) {
+        tab1.neighbourhoodRadiusPaper.path.segments[0].remove();
+      }
+      tab1.neighbourhoodRadiusPaper.points = [];
+      tab1.neighbourhoodRadiusPaper.intersection.position.x = 0;
+      tab1.neighbourhoodRadiusPaper.intersection.position.y = 0;
+      tab1.neighbourhoodRadiusPaper.setIntersectionLabel('', 0, 0);
+    }
+    tab1.neighbourhoodRadiusPaper.redraw = function() {
+      tab1.neighbourhoodRadiusPaper.clear();
+      tab1.neighbourhoodRadiusPaper.max = tab1.mapRadius+1;
+      tab1.neighbourhoodRadiusPaper.scaleX = tab1.neighbourhoodRadiusPaper.width / tab1.maxIterations;
+      tab1.neighbourhoodRadiusPaper.scaleY = tab1.neighbourhoodRadiusPaper.height / tab1.neighbourhoodRadiusPaper.max;
+      tab1.neighbourhoodRadiusPaper.verticalLine.position.x = (tab1.bmuHistory.length-1) * tab1.neighbourhoodRadiusPaper.scaleX;
+      for (var i = 0; i < tab1.bmuHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab1.neighbourhoodRadiusPaper.points[iter]
+            && "undefined" !== typeof tab1.bmuHistory[iter]) {
+          var x = iter * tab1.neighbourhoodRadiusPaper.scaleX;
+          var y = tab1.neighbourhoodRadiusPaper.scaleY * (tab1.neighbourhoodRadiusPaper.max - tab1.bmuHistory[iter].neighbourhoodRadius);
+          tab1.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+          tab1.neighbourhoodRadiusPaper.points[iter] = iter;
+          tab1.neighbourhoodRadiusPaper.setIntersectionLabel(
+            tab1.bmuHistory[iter].neighbourhoodRadius,
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab1.neighbourhoodRadiusPaper.showIteration = function(iteration) {
+      tab1.neighbourhoodRadiusPaper.verticalLine.position.x = iteration * tab1.neighbourhoodRadiusPaper.scaleX;
+      var intersections = tab1.neighbourhoodRadiusPaper.verticalLine.getIntersections(tab1.neighbourhoodRadiusPaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab1.neighbourhoodRadiusPaper.intersection.position.x = intersections[0].point.x;
+        tab1.neighbourhoodRadiusPaper.intersection.position.y = intersections[0].point.y;
+        tab1.neighbourhoodRadiusPaper.setIntersectionLabel(
+          tab1.bmuHistory[iteration].neighbourhoodRadius,
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab1.doIterate) {
+          return;
+        }
+        if (tab1.bmuHistory.length > 1) {
+          tab1.neighbourhoodRadiusPaper.max = tab1.mapRadius+1;
+          tab1.neighbourhoodRadiusPaper.scaleX = tab1.neighbourhoodRadiusPaper.width / tab1.maxIterations;
+          tab1.neighbourhoodRadiusPaper.scaleY = tab1.neighbourhoodRadiusPaper.height / tab1.neighbourhoodRadiusPaper.max;
+//           var iter = tab1.somIteration - 1;
+          for (var iter = tab1.neighbourhoodRadiusPaper.points.length - 1; iter < tab1.bmuHistory.length; iter++) {
+            if ("undefined" === typeof tab1.neighbourhoodRadiusPaper.points[iter]
+                && "undefined" !== typeof tab1.bmuHistory[iter]) {
+              var x = iter * tab1.neighbourhoodRadiusPaper.scaleX;
+              var y = tab1.neighbourhoodRadiusPaper.scaleY * (tab1.neighbourhoodRadiusPaper.max - tab1.bmuHistory[iter].neighbourhoodRadius);
+              tab1.neighbourhoodRadiusPaper.verticalLine.position.x = x;
+              tab1.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+              tab1.neighbourhoodRadiusPaper.points[iter] = iter;
+              tab1.neighbourhoodRadiusPaper.intersection.position.x = x;
+              tab1.neighbourhoodRadiusPaper.intersection.position.y = y;
+              tab1.neighbourhoodRadiusPaper.setIntersectionLabel(
+                tab1.bmuHistory[iter].neighbourhoodRadius,
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="somTraining_tab2">
+    try {
+      tab2.somTraining = {
+        paper: paper,
+        project: paper.project,
+        activeLayer: paper.project.activeLayer
+      };
+      var sizeArgs = {
+        "scaleX": 500,
+        "scaleY": 500
+      };
+      var size;
+    } catch(e) {
+      console.warn(e)
+    }
+    
+    function sat2_plotSomInit() {
+      try {
+        size = getCanvasSize("tab2", sizeArgs);
+        view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+        size.sideLength = size.sizeX / tab2.somW;
+        size.hex = {};
+        size.hex.countW = tab2.somW + 0.5;
+        size.hex.width = size.sizeX / size.hex.countW;
+        size.hex.radius = size.hex.width / math.sqrt(3);
+        size.hex.heightSum = (tab2.somH % 2 === 0)
+          ? tab2.somH*size.hex.radius*3/2+size.hex.radius/2
+          : math.floor(tab2.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+        size.hex.offsetX = size.hex.radius;
+        size.hex.offsetY = size.hex.radius + (size.sizeY - size.hex.heightSum)/2;
+        
+        var ptGrid = {};
+        for (var i = 0; i < tab2.somW; i++) {
+          ptGrid[i] = {};
+          for (var j = 0; j < tab2.somH; j++) {
+            // var coordinateArray = math.squeeze(tab2.som.subset(math.index(i,j,[0,1,2]))).toArray();
+            var coordinateArray = tab2.som[i][j];
+            var r = coordinateArray[0];
+            var g = coordinateArray[1];
+            var b = coordinateArray[2];
+            
+            if (tab2.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(i*size.sideLength, j*size.sideLength, size.sideLength, size.sideLength);
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(r, g, b);
+            ptGrid[i][j] = path;
+          }
+        }
+        return ptGrid;
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    function sat2_plotSomPts() {
+      try {
+        for (var i = 0; i < tab2.somW; i++) {
+          for (var j = 0; j < tab2.somH; j++) {
+            // var coordinateArray = math.squeeze(tab2.som.subset(math.index(i,j,[0,1,2]))).toArray();
+            var coordinateArray = tab2.som[i][j];
+            var r = coordinateArray[0];
+            var g = coordinateArray[1];
+            var b = coordinateArray[2];
+
+            tab2.sat_somPtGrid[i][j].fillColor.red = r;
+            tab2.sat_somPtGrid[i][j].fillColor.green = g;
+            tab2.sat_somPtGrid[i][j].fillColor.blue = b;
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    function sat2_saveHistory(iter) {
+      try {
+        tab2.sat_somPtGridHistory[iter] = {};
+        for (var i = 0; i < tab2.somW; i++) {
+          tab2.sat_somPtGridHistory[iter][i] = {};
+          for (var j = 0; j < tab2.somH; j++) {
+            
+            tab2.sat_somPtGridHistory[iter][i][j] = {
+              r: tab2.sat_somPtGrid[i][j].fillColor.red,
+              g: tab2.sat_somPtGrid[i][j].fillColor.green,
+              b: tab2.sat_somPtGrid[i][j].fillColor.blue
+            };
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    function sat2_plotSomFromHistory(ptGrid) {
+      try {
+        for (var i = 0; i < tab2.somW; i++) {
+          for (var j = 0; j < tab2.somH; j++) {
+            tab2.sat_somPtGrid[i][j].fillColor.red = ptGrid[i][j].r;
+            tab2.sat_somPtGrid[i][j].fillColor.green = ptGrid[i][j].g;
+            tab2.sat_somPtGrid[i][j].fillColor.blue = ptGrid[i][j].b;
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    function sat2_destroyPoints() {
+      try {
+        for (var i = 0; i < Object.size(tab2.sat_somPtGrid); i++) {
+          for (var j = 0; j < Object.size(tab2.sat_somPtGrid[i]); j++) {
+            tab2.sat_somPtGrid[i][j].remove();
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    function sat2_plotSomInitFromHistory() {
+      try {
+        sat2_destroyPoints();
+        var maxIter = tab2.somIteration - 2;
+        var ptCoordinateGrid = tab2.sat_somPtGridHistory[maxIter];
+
+        size = getCanvasSize("tab2", sizeArgs);
+        view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+        size.sideLength = size.sizeX / tab2.somW;
+        size.hex = {};
+        size.hex.countW = tab2.somW + 0.5;
+        size.hex.width = size.sizeX / size.hex.countW;
+        size.hex.radius = size.hex.width / math.sqrt(3);
+        size.hex.heightSum = (tab2.somH % 2 === 0)
+          ? tab2.somH*size.hex.radius*3/2+size.hex.radius/2
+          : math.floor(tab2.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+        size.hex.offsetX = size.hex.radius;
+        size.hex.offsetY = size.hex.radius + (size.sizeY - size.hex.heightSum)/2;
+        
+        var ptGrid = {};
+        for (var i = 0; i < tab2.somW; i++) {
+          ptGrid[i] = {};
+          for (var j = 0; j < tab2.somH; j++) {
+            var coordinateArray = ptCoordinateGrid[i][j];
+            var r = coordinateArray.r;
+            var g = coordinateArray.g;
+            var b = coordinateArray.b;
+            
+            if (tab2.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(i*size.sideLength, j*size.sideLength, size.sideLength, size.sideLength);
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(r, g, b);
+            ptGrid[i][j] = path;
+          }
+        }
+        return ptGrid;
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+
+    tab2.sat_somPtGrid = sat2_plotSomInit();
+    sat2_saveHistory(0);
+    
+    function onFrame(event) {
+      try {
+        debug && console.log(tab2.showHistoryIteration, typeof tab2.showHistoryIteration)
+        if (typeof tab2.initFromHistory === "boolean" && tab2.initFromHistory === true) {
+          tab2.sat_somPtGrid = sat2_plotSomInitFromHistory();
+          tab2.initFromHistory = false;
+          if ("undefined" !== typeof tab2.hitMapPaper.redraw) {
+            tab2.hitMapPaper.redraw(tab2.somIteration - 2);
+          }
+          if ("undefined" !== typeof tab2.changeRatePaper.clear) {
+            tab2.changeRatePaper.clear();
+          }
+          if ("undefined" !== typeof tab2.changeRatePaper.redraw) {
+            tab2.changeRatePaper.redraw();
+          }
+          if ("undefined" !== typeof tab2.neighbourhoodRadiusPaper.clear) {
+            tab2.neighbourhoodRadiusPaper.clear();
+          }
+          if ("undefined" !== typeof tab2.neighbourhoodRadiusPaper.redraw) {
+            tab2.neighbourhoodRadiusPaper.redraw();
+          }
+          var bmu = tab2.bmuHistory[tab2.somIteration - 2];
+          if ("undefined" === typeof bmu) {
+            showNodesWithinGridDistanceClear("tab2");
+          } else {
+            showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab2");
+          }
+          return;
+        }
+        if (typeof tab2.showHistoryIteration === "number" && tab2.showHistoryIteration >= 0) {
+          if ("undefined" !== typeof tab2.hitMapPaper.redraw) {
+            tab2.hitMapPaper.redraw(tab2.showHistoryIteration);
+          }
+          if ("undefined" !== typeof tab2.changeRatePaper.showIteration) {
+            tab2.changeRatePaper.showIteration(tab2.showHistoryIteration);
+          }
+          if ("undefined" !== typeof tab2.neighbourhoodRadiusPaper.showIteration) {
+            tab2.neighbourhoodRadiusPaper.showIteration(tab2.showHistoryIteration);
+          }
+          var historyPtGrid = tab2.sat_somPtGridHistory[tab2.showHistoryIteration];
+          if ("undefined" === typeof historyPtGrid) {
+            tab2.showHistoryIteration = false;
+            return;
+          }
+          sat2_plotSomFromHistory(historyPtGrid);
+          var bmu = tab2.bmuHistory[tab2.showHistoryIteration];
+          if ("undefined" === typeof bmu) {
+            showNodesWithinGridDistanceClear("tab2");
+          } else {
+            showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab2");
+          }
+          tab2.showHistoryIteration = false;
+          return;
+        }
+        if (tab2.somIteration === 2) {
+          $("#resetSomButton_tab2").removeAttr("disabled");
+          $("#trainStopSomButton_tab2").removeAttr("disabled");
+        }
+        if (tab2.somIteration === tab2.maxIterations + 1 || tab2.learningJustFinished) {
+          debug && console.log("maxIterations just surpassed OR learningJustFinished")
+          $("#trainSomButton_tab2").attr('disabled', 'disabled');
+          $("#trainStopSomButton_tab2").attr('disabled', 'disabled');
+          $("#sat_historySliderInput_tab2").slider("enable");
+          $("#tab2 .somConstants").slider("enable");
+          $("#tab2 .inputSelectorWrapper select").removeAttr("disabled");
+          $("#tab2 select[multiple=multiple]").multiselect("enable");
+          $("#tab2 .historyImgContainer img").removeClass("disabled");
+          if (window.saveToLocalStorage || window.saveOnServer) $("body").addClass("disabled");
+          saveToLocalStorageHistory("tab2");
+          if (window.saveToLocalStorage || window.saveOnServer) $("body").removeClass("disabled");
+          tab2.learningFinished = true;
+          tab2.doIterate = false;
+          tab2.learningJustFinished = false;
+          tab2.somIteration++;
+        }
+        if (tab2.somIteration > tab2.maxIterations || tab2.learningFinished) {
+          debug && console.log("You shall not pass!")
+          return;
+        }
+        if (tab2.resetJustDone) {
+          tab2.resetJustDone = false;
+          tab2.doIterate = false;
+          sat2_destroyPoints();
+          tab2.sat_somPtGrid = sat2_plotSomInit();
+          tab2.sat_somPtGridHistory = [];
+          sat2_saveHistory(0);
+        } else {
+          var doIterateLoc = tab2.doIterate || false;
+          if (doIterateLoc === false) {
+            return;
+          }
+          SomAlgorithmIterationStep(tab2.somIteration, undefined, "tab2");
+          sat2_plotSomPts();
+          if ("undefined" !== typeof tab2.hitMapPaper.redraw) {
+            tab2.hitMapPaper.redraw(tab2.somIteration);
+          }
+          var bmu = tab2.bmuHistory[tab2.somIteration];
+          if ("undefined" === typeof bmu) {
+            showNodesWithinGridDistanceClear("tab2");
+          } else {
+            showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab2");
+          }
+          sat2_saveHistory(tab2.somIteration);
+          $("#counter_tab2 span").html(tab2.somIteration);
+          tab2.somIteration++;
+          $('#sat_historySliderInput_tab2')
+              .slider('setAttribute', 'value', tab2.somIteration - 1)
+              .slider('setAttribute', 'max', tab2.somIteration - 1)
+              .slider('refresh');
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="hitMap_tab2">
+    try {
+      tab2.hitMapPaper = {
+        paper: paper,
+        project: paper.project,
+        activeLayer: paper.project.activeLayer,
+        iteration: undefined
+      };
+      tab2.hitMapPaper.sizeArgs = {};
+      tab2.hitMapPaper.group = new Group();
+    } catch(e) {
+      console.warn(e)
+    }
+
+    tab2.hitMapPaper.init = function() {
+      try {
+        // clear the old grid //
+        if ("undefined" !== typeof tab2.hitMapPaper.grid && tab2.hitMapPaper.grid.length > 0) {
+          for (var i = 0; i < tab2.hitMapPaper.grid.length; i++) {
+            for (var j = 0; j < tab2.hitMapPaper.grid[i].length; j++) {
+              tab2.hitMapPaper.grid[i][j].remove();
+            }
+          }
+        }
+        
+        // draw a new grid //
+        tab2.hitMapPaper.size = getCanvasSize("tab2", tab2.hitMapPaper.sizeArgs);
+        view.viewSize = new paper.Size(tab2.hitMapPaper.size.sizeX, tab2.hitMapPaper.size.sizeY);
+        tab2.hitMapPaper.size.sideLength = tab2.hitMapPaper.size.sizeX / tab2.somW;
+        tab2.hitMapPaper.size.hex = {};
+        tab2.hitMapPaper.size.hex.countW = tab2.somW + 0.5;
+        tab2.hitMapPaper.size.hex.width = tab2.hitMapPaper.size.sizeX / tab2.hitMapPaper.size.hex.countW;
+        tab2.hitMapPaper.size.hex.radius = tab2.hitMapPaper.size.hex.width / math.sqrt(3);
+        tab2.hitMapPaper.size.hex.heightSum = (tab2.somH % 2 === 0)
+          ? tab2.somH*tab2.hitMapPaper.size.hex.radius*3/2+tab2.hitMapPaper.size.hex.radius/2
+          : math.floor(tab2.somH/2)*3*tab2.hitMapPaper.size.hex.radius+tab2.hitMapPaper.size.hex.radius*5/2;
+        tab2.hitMapPaper.size.hex.offsetX = tab2.hitMapPaper.size.hex.radius;
+        tab2.hitMapPaper.size.hex.offsetY = tab2.hitMapPaper.size.hex.radius + (tab2.hitMapPaper.size.sizeY - tab2.hitMapPaper.size.hex.heightSum)/2;
+        
+        var ptGrid = [];
+        for (var i = 0; i < tab2.somW; i++) {
+          ptGrid[i] = [];
+          for (var j = 0; j < tab2.somH; j++) {
+            if (tab2.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*tab2.hitMapPaper.size.hex.width + tab2.hitMapPaper.size.hex.offsetX;
+              var hexCenterY = j*tab2.hitMapPaper.size.hex.radius*3/2 + tab2.hitMapPaper.size.hex.offsetY;
+              if (j%2 === 1) {
+                hexCenterX += tab2.hitMapPaper.size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                tab2.hitMapPaper.size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(i*tab2.hitMapPaper.size.sideLength, j*tab2.hitMapPaper.size.sideLength, tab2.hitMapPaper.size.sideLength, tab2.hitMapPaper.size.sideLength);
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.strokeColor = "grey";
+            path.strokeWidth = 1;
+            ptGrid[i][j] = path;
+            tab2.hitMapPaper.group.addChild(path);
+          }
+        }
+        tab2.hitMapPaper.grid = ptGrid;
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    
+    tab2.hitMapPaper.clear = function() {
+      try {
+        if ("undefined" !== typeof tab2.hitMapPaper.hitMapPts && tab2.hitMapPaper.hitMapPts.length > 0) {
+          for (var i = 0; i < tab2.hitMapPaper.hitMapPts.length; i++) {
+            for (var j = 0; j < tab2.hitMapPaper.hitMapPts[i].length; j++) {
+              if ("undefined" !== typeof tab2.hitMapPaper.hitMapPts[i][j]) {
+                tab2.hitMapPaper.hitMapPts[i][j].remove();
+              }
+            }
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    tab2.hitMapPaper.draw = function(iteration) {
+      try {
+        if ("undefined" === typeof tab2.hitMapHistory || "undefined" === typeof tab2.hitMapHistory[iteration]) {
+          console.warn("No hitMapHistory for iteration "+iteration);
+          return;
+        }
+        tab2.hitMapPaper.iteration = iteration;
+        var hitMapMax = math.max(tab2.hitMapHistory[iteration].counts);
+        var ptGrid = [];
+        for (var i = 0; i < tab2.somW; i++) {
+          ptGrid[i] = [];
+          for (var j = 0; j < tab2.somH; j++) {
+            var hitMapCount = tab2.hitMapHistory[iteration].counts[i][j];
+            if (hitMapCount === 0) {
+              continue;
+            }
+            var scaling = hitMapCount / hitMapMax;
+            if (tab2.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*tab2.hitMapPaper.size.hex.width + tab2.hitMapPaper.size.hex.offsetX;
+              var hexCenterY = j*tab2.hitMapPaper.size.hex.radius*3/2 + tab2.hitMapPaper.size.hex.offsetY;
+              if (j%2 === 1) {
+                hexCenterX += tab2.hitMapPaper.size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                tab2.hitMapPaper.size.hex.radius * scaling // radius
+              );
+            } else {
+              var offset = (tab2.hitMapPaper.size.sideLength - tab2.hitMapPaper.size.sideLength * scaling)/2;
+              var rectangle = new Rectangle(
+                i*tab2.hitMapPaper.size.sideLength + offset, j*tab2.hitMapPaper.size.sideLength + offset,
+                tab2.hitMapPaper.size.sideLength * scaling, tab2.hitMapPaper.size.sideLength * scaling
+              );
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = "grey";
+            if ("undefined" !== typeof tab2.inputLabelColors) {
+              var cntMax = 0;
+              var maxLabels = [];
+              var hitCount = 0;
+              for (var l = 0; l < tab2.inputLabelColors._names.length; l++) {
+                var labelName = tab2.inputLabelColors._names[l];
+                var cnt = tab2.hitMapHistory[iteration].labelCounts[labelName][i][j];
+                if (cnt > 0 && cnt >= cntMax) {
+                  if (cnt > cntMax) {
+                    maxLabels = [];
+                    cntMax = cnt;
+                  }
+                  maxLabels.push(labelName);
+                  hitCount++;
+                } else if (cnt > 0) {
+                  hitCount++;
+                }
+              }
+              if (maxLabels.length === 1) {
+                var labelName = maxLabels[0];
+                var labelColor = tab2.inputLabelColors[labelName];
+                if ("undefined" === typeof labelColor) {
+                  console.log(labelName, tab2.inputLabelColors)
+                } else if (labelColor instanceof Array) {
+                  path.fillColor = new Color(labelColor[0], labelColor[1], labelColor[2]);
+                } else {
+                  path.fillColor = labelColor;
+                }
+                if (hitCount > 1) {
+                  path.strokeWidth = 2;
+                  path.strokeColor = "black";
+                  path.dashArray = [5, 5];
+                }
+              }
+            } else {
+              path.fillColor = "orange";
+            }
+            path.opacity = 1;
+            ptGrid[i][j] = path;
+            tab2.hitMapPaper.group.addChild(path);
+          }
+        }
+        tab2.hitMapPaper.hitMapPts = ptGrid;
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+    tab2.hitMapPaper.redraw = function(iteration) {
+      tab2.hitMapPaper.clear();
+      tab2.hitMapPaper.draw(iteration);
+    }
+    tab2.hitMapPaper.init();
+    
+    function onMouseUp(event) {
+      try {
+        $("#hitMap_tab2_CanvasWrapper .floatingPointLabel").remove();
+        var pts = tab2.hitMapPaper.grid;
+        if ("undefined" === typeof pts) {
+          return;
+        }
+        var pos = event.point;
+        var canvasWidth = $("#hitMap_tab2").width();
+        var scale = tab2.hitMapPaper.size.sizeX / canvasWidth;
+        if (tab2.GridDistanceType === "hexagonal_neighbourhood_2d") {
+          var r = tab2.hitMapPaper.size.hex.radius;
+        } else {
+          var r = tab2.hitMapPaper.size.sideLength / 2;
+        }
+        pos.x *= scale;
+        pos.y *= scale;
+        var usedLabels = {};
+        for (var i = 0; i < pts.length; i++) {
+          for (var j = 0; j < pts[i].length; j++) {
+            var ptPos = pts[i][j].position;
+            if (math.distance([pos.x, pos.y], [ptPos.x, ptPos.y]) < r) {
+              var labelTexts = [];
+              if ("undefined" === typeof tab2.hitMapHistory.length === 0 || "undefined" === typeof tab2.hitMapHistory[tab2.hitMapPaper.iteration]) {
+                break;
+              }
+              if ("undefined" === typeof tab2.inputLabels) {
+                var cnt = tab2.hitMapHistory[tab2.hitMapPaper.iteration].counts[i][j];
+                if (cnt > 0) {
+                  var language = $("#language_switcher").val().toLowerCase();
+                  var languageID = lang_ids[language];
+                  var dictionary = lang_strings;
+                  if (dictionary.hasOwnProperty(languageID) && "undefined" !== typeof dictionary[languageID].count) {
+                    var countWord = dictionary[languageID].count;
+                  } else {
+                    var countWord = "Počet";
+                  }
+                  labelTexts.push("<span data-translate=\"count\">" + countWord + "</span>: " + cnt);
+                }
+              } else {
+                for (var l = 0; l < tab2.inputLabels.length; l++) {
+                  var labelName = tab2.inputLabels[l];
+                  if ("undefined" !== typeof usedLabels[labelName]) {
+                    continue;
+                  }
+                  usedLabels[labelName] = true;
+                  var cnt = tab2.hitMapHistory[tab2.hitMapPaper.iteration].labelCounts[labelName][i][j];
+                  if (cnt > 0) {
+                    labelTexts.push(labelName);
+                  }
+                }
+              }
+              if (labelTexts.length > 0) {
+                labelText = labelTexts.join(", ");
+                tab2.hitMapPaper.ptLabel = $('<span class="floatingPointLabel">'+labelText+'</span>')
+                  .appendTo($("#hitMap_tab2_CanvasWrapper"))
+                  .css("top", +event.point.y)
+                  .css("left", +event.point.x);
+                var curTabID = "tab2";
+                if ("undefined" === window[curTabID].labelTimeoutHandle) {
+                  window[curTabID].labelTimeoutHandle = false;
+                }
+                if (window[curTabID].labelTimeoutHandle !== false) {
+                  clearTimeout(window[curTabID].labelTimeoutHandle);
+                  window[curTabID].labelTimeoutHandle = false;
+                }
+                window[curTabID].labelTimeoutHandle = setTimeout(function() {
+                  $("#hitMap_"+curTabID+"_CanvasWrapper .floatingPointLabel").remove();
+                }, labelTimeout);
+              }
+              break;
+            }
+          }
+        }
+      } catch(e) {
+        console.warn(e)
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="changeRate_tab2">
+    tab2.changeRatePaper = {};
+    tab2.changeRatePaper.changeRatePoints = [];
+    tab2.changeRatePaper.height = 100;
+    tab2.changeRatePaper.width = 500;
+    view.viewSize = new paper.Size(tab2.changeRatePaper.width, tab2.changeRatePaper.height);
+    tab2.changeRatePaper.scaleY = 1;
+    tab2.changeRatePaper.scaleX = 1;
+    tab2.changeRatePaper.path = new Path();
+    tab2.changeRatePaper.path.strokeColor = 'red';
+//     tab2.changeRatePaper.verticalLine = new Path();
+    tab2.changeRatePaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab2.changeRatePaper.height));
+    tab2.changeRatePaper.verticalLine.strokeColor = 'black';
+    tab2.changeRatePaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab2.changeRatePaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab2.changeRatePaper.intersectionLabel.justification = 'center';
+    tab2.changeRatePaper.intersectionLabel.fillColor = 'black';
+    tab2.changeRatePaper.intersectionLabel.content = '';
+    tab2.changeRatePaper.intersectionLabel.fontSize = '14px';
+    
+    tab2.changeRatePaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      if ("number" === typeof content) {
+        if (content < 1) {
+          content = math.round(content, tab2.changeRateThreshold);
+        } else {
+          content = math.round(content, 2);
+        }
+      }
+      tab2.changeRatePaper.intersectionLabel.content = content;
+      tab2.changeRatePaper.intersectionLabel.position.x = x;
+      tab2.changeRatePaper.intersectionLabel.position.y = y;
+      var bounds = tab2.changeRatePaper.intersectionLabel.getBounds();
+      if (x > tab2.changeRatePaper.width/2) {
+        tab2.changeRatePaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab2.changeRatePaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab2.changeRatePaper.height/2) {
+        tab2.changeRatePaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab2.changeRatePaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab2.changeRatePaper.clear = function() {
+      tab2.changeRatePaper.verticalLine.position.x = 0;
+      while (tab2.changeRatePaper.path.segments.length > 0) {
+        tab2.changeRatePaper.path.segments[0].remove();
+      }
+      tab2.changeRatePaper.changeRatePoints = [];
+      tab2.changeRatePaper.intersection.position.x = 0;
+      tab2.changeRatePaper.intersection.position.y = 0;
+      tab2.changeRatePaper.setIntersectionLabel('', 0, 0);
+    }
+    tab2.changeRatePaper.redraw = function() {
+      tab2.changeRatePaper.clear();
+      tab2.changeRatePaper.max = math.max(tab2.changeRateHistory);
+      tab2.changeRatePaper.scaleX = tab2.changeRatePaper.width / tab2.maxIterations;
+      tab2.changeRatePaper.scaleY = tab2.changeRatePaper.height / tab2.changeRatePaper.max;
+      tab2.changeRatePaper.verticalLine.position.x = (tab2.changeRateHistory.length-1) * tab2.changeRatePaper.scaleX;
+      for (var i = 0; i < tab2.changeRateHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab2.changeRatePaper.changeRatePoints[iter]
+            && "undefined" !== typeof tab2.changeRateHistory[iter]) {
+          var x = iter * tab2.changeRatePaper.scaleX;
+          var y = tab2.changeRatePaper.scaleY * (tab2.changeRatePaper.max - tab2.changeRateHistory[iter]);
+          tab2.changeRatePaper.path.add(new Point(x, y));
+          tab2.changeRatePaper.changeRatePoints[iter] = iter;
+          tab2.changeRatePaper.setIntersectionLabel(
+            tab2.changeRateHistory[iter],
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab2.changeRatePaper.showIteration = function(iteration) {
+      tab2.changeRatePaper.verticalLine.position.x = iteration * tab2.changeRatePaper.scaleX;
+      var intersections = tab2.changeRatePaper.verticalLine.getIntersections(tab2.changeRatePaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab2.changeRatePaper.intersection.position.x = intersections[0].point.x;
+        tab2.changeRatePaper.intersection.position.y = intersections[0].point.y;
+        tab2.changeRatePaper.setIntersectionLabel(
+          tab2.changeRateHistory[iteration],
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab2.doIterate) {
+          return;
+        }
+        // draw points as training runs //
+        if (tab2.changeRateHistory.length > 1) {
+          tab2.changeRatePaper.max = math.max(tab2.changeRateHistory);
+          tab2.changeRatePaper.scaleX = tab2.changeRatePaper.width / tab2.maxIterations;
+          tab2.changeRatePaper.scaleY = tab2.changeRatePaper.height / tab2.changeRatePaper.max;
+//           var iter = tab2.somIteration - 1;
+          for (var iter = tab2.changeRatePaper.changeRatePoints.length - 1; iter < tab2.changeRateHistory.length; iter++) {
+            if ("undefined" === typeof tab2.changeRatePaper.changeRatePoints[iter]
+                && "undefined" !== typeof tab2.changeRateHistory[iter]) {
+              var x = iter * tab2.changeRatePaper.scaleX;
+              var y = tab2.changeRatePaper.scaleY * (tab2.changeRatePaper.max - tab2.changeRateHistory[iter]);
+              tab2.changeRatePaper.verticalLine.position.x = x;
+              tab2.changeRatePaper.path.add(new Point(x, y));
+              tab2.changeRatePaper.changeRatePoints[iter] = iter;
+              tab2.changeRatePaper.intersection.position.x = x;
+              tab2.changeRatePaper.intersection.position.y = y;
+              tab2.changeRatePaper.setIntersectionLabel(
+                tab2.changeRateHistory[iter],
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="neighbourhoodRadius_tab2">
+    tab2.neighbourhoodRadiusPaper = {};
+    tab2.neighbourhoodRadiusPaper.points = [];
+    tab2.neighbourhoodRadiusPaper.height = 100;
+    tab2.neighbourhoodRadiusPaper.width = 500;
+    view.viewSize = new paper.Size(tab2.neighbourhoodRadiusPaper.width, tab2.neighbourhoodRadiusPaper.height);
+    tab2.neighbourhoodRadiusPaper.scaleY = 1;
+    tab2.neighbourhoodRadiusPaper.scaleX = 1;
+    tab2.neighbourhoodRadiusPaper.path = new Path();
+    tab2.neighbourhoodRadiusPaper.path.strokeColor = 'red';
+//     tab2.neighbourhoodRadiusPaper.verticalLine = new Path();
+    tab2.neighbourhoodRadiusPaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab2.neighbourhoodRadiusPaper.height));
+    tab2.neighbourhoodRadiusPaper.verticalLine.strokeColor = 'black';
+    tab2.neighbourhoodRadiusPaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab2.neighbourhoodRadiusPaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab2.neighbourhoodRadiusPaper.intersectionLabel.justification = 'center';
+    tab2.neighbourhoodRadiusPaper.intersectionLabel.fillColor = 'black';
+    tab2.neighbourhoodRadiusPaper.intersectionLabel.content = '';
+    tab2.neighbourhoodRadiusPaper.intersectionLabel.fontSize = '14px';
+    
+    tab2.neighbourhoodRadiusPaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      tab2.neighbourhoodRadiusPaper.intersectionLabel.content = content;
+      tab2.neighbourhoodRadiusPaper.intersectionLabel.position.x = x;
+      tab2.neighbourhoodRadiusPaper.intersectionLabel.position.y = y;
+      var bounds = tab2.neighbourhoodRadiusPaper.intersectionLabel.getBounds();
+      if (x > tab2.neighbourhoodRadiusPaper.width/2) {
+        tab2.neighbourhoodRadiusPaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab2.neighbourhoodRadiusPaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab2.neighbourhoodRadiusPaper.height/2) {
+        tab2.neighbourhoodRadiusPaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab2.neighbourhoodRadiusPaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab2.neighbourhoodRadiusPaper.clear = function() {
+      tab2.neighbourhoodRadiusPaper.verticalLine.position.x = 0;
+      while (tab2.neighbourhoodRadiusPaper.path.segments.length > 0) {
+        tab2.neighbourhoodRadiusPaper.path.segments[0].remove();
+      }
+      tab2.neighbourhoodRadiusPaper.points = [];
+      tab2.neighbourhoodRadiusPaper.intersection.position.x = 0;
+      tab2.neighbourhoodRadiusPaper.intersection.position.y = 0;
+      tab2.neighbourhoodRadiusPaper.setIntersectionLabel('', 0, 0);
+    }
+    tab2.neighbourhoodRadiusPaper.redraw = function() {
+      tab2.neighbourhoodRadiusPaper.clear();
+      tab2.neighbourhoodRadiusPaper.max = tab2.mapRadius+1;
+      tab2.neighbourhoodRadiusPaper.scaleX = tab2.neighbourhoodRadiusPaper.width / tab2.maxIterations;
+      tab2.neighbourhoodRadiusPaper.scaleY = tab2.neighbourhoodRadiusPaper.height / tab2.neighbourhoodRadiusPaper.max;
+      tab2.neighbourhoodRadiusPaper.verticalLine.position.x = (tab2.bmuHistory.length-1) * tab2.neighbourhoodRadiusPaper.scaleX;
+      for (var i = 0; i < tab2.bmuHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab2.neighbourhoodRadiusPaper.points[iter]
+            && "undefined" !== typeof tab2.bmuHistory[iter]) {
+          var x = iter * tab2.neighbourhoodRadiusPaper.scaleX;
+          var y = tab2.neighbourhoodRadiusPaper.scaleY * (tab2.neighbourhoodRadiusPaper.max - tab2.bmuHistory[iter].neighbourhoodRadius);
+          tab2.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+          tab2.neighbourhoodRadiusPaper.points[iter] = iter;
+          tab2.neighbourhoodRadiusPaper.setIntersectionLabel(
+            tab2.bmuHistory[iter].neighbourhoodRadius,
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab2.neighbourhoodRadiusPaper.showIteration = function(iteration) {
+      tab2.neighbourhoodRadiusPaper.verticalLine.position.x = iteration * tab2.neighbourhoodRadiusPaper.scaleX;
+      var intersections = tab2.neighbourhoodRadiusPaper.verticalLine.getIntersections(tab2.neighbourhoodRadiusPaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab2.neighbourhoodRadiusPaper.intersection.position.x = intersections[0].point.x;
+        tab2.neighbourhoodRadiusPaper.intersection.position.y = intersections[0].point.y;
+        tab2.neighbourhoodRadiusPaper.setIntersectionLabel(
+          tab2.bmuHistory[iteration].neighbourhoodRadius,
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab2.doIterate) {
+          return;
+        }
+        if (tab2.bmuHistory.length > 1) {
+          tab2.neighbourhoodRadiusPaper.max = tab2.mapRadius+1;
+          tab2.neighbourhoodRadiusPaper.scaleX = tab2.neighbourhoodRadiusPaper.width / tab2.maxIterations;
+          tab2.neighbourhoodRadiusPaper.scaleY = tab2.neighbourhoodRadiusPaper.height / tab2.neighbourhoodRadiusPaper.max;
+//           var iter = tab2.somIteration - 1;
+          for (var iter = tab2.neighbourhoodRadiusPaper.points.length - 1; iter < tab2.bmuHistory.length; iter++) {
+            if ("undefined" === typeof tab2.neighbourhoodRadiusPaper.points[iter]
+                && "undefined" !== typeof tab2.bmuHistory[iter]) {
+              var x = iter * tab2.neighbourhoodRadiusPaper.scaleX;
+              var y = tab2.neighbourhoodRadiusPaper.scaleY * (tab2.neighbourhoodRadiusPaper.max - tab2.bmuHistory[iter].neighbourhoodRadius);
+              tab2.neighbourhoodRadiusPaper.verticalLine.position.x = x;
+              tab2.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+              tab2.neighbourhoodRadiusPaper.points[iter] = iter;
+              tab2.neighbourhoodRadiusPaper.intersection.position.x = x;
+              tab2.neighbourhoodRadiusPaper.intersection.position.y = y;
+              tab2.neighbourhoodRadiusPaper.setIntersectionLabel(
+                tab2.bmuHistory[iter].neighbourhoodRadius,
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="somTraining_tab3">
+    tab3.somTraining = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer
+    };
+    var sizeArgs = {
+      "scaleX": 125,
+      "scaleY": 125
+    };
+    var size;
+    
+    function sat3_plotSomInit() {
+      size = getCanvasSize("tab3", sizeArgs);
+      view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+      size.sideLength = size.sizeX / tab3.somW * 0.45;
+      size.hex = {};
+      size.hex.countW = tab3.somW + 0.5;
+      size.hex.width = size.sizeX / size.hex.countW * 0.45;
+      size.hex.radius = size.hex.width / math.sqrt(3);
+      size.hex.heightSum = (tab3.somH % 2 === 0)
+        ? tab3.somH*size.hex.radius*3/2+size.hex.radius/2
+        : math.floor(tab3.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+      size.hex.offsetX = size.hex.radius;
+      size.hex.offsetY = size.hex.radius + (size.sizeY*0.45 - size.hex.heightSum)/2;
+      
+      var ptGrid = {};
+      for (var i = 0; i < tab3.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab3.somH; j++) {
+          // var coordinateArray = math.squeeze(tab3.som.subset(math.index(i,j,[0,1,2,3]))).toArray();
+          var coordinateArray = tab3.som[i][j];
+          var minima = math.min(math.min(tab3.som,0),0);
+          var maxima = math.max(math.max(tab3.som,0),0);
+          
+          ptGrid[i][j] = {};
+          for (var ind = 0; ind < 4; ind++) {
+            var measurement = coordinateArray[ind];
+            var measurementMin = minima[ind];
+            var measurementMax = maxima[ind];
+            
+            var offsetCoordX = ind % 2;
+            var offsetCoordY = math.floor(ind / 2);
+            
+            var offsetX = offsetCoordX * size.sizeX / 2 + size.sizeX*0.1/4;
+            var offsetY = offsetCoordY * size.sizeY / 2 + size.sizeY*0.1/4;
+            var color = gradientColor((measurement-measurementMin)/(measurementMax-measurementMin));
+            
+            if (tab3.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX + offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY + offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(
+                i*size.sideLength + offsetX,
+                j*size.sideLength + offsetY,
+                size.sideLength,
+                size.sideLength
+              );
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(color.red, color.green, color.blue);
+            ptGrid[i][j][ind] = path;
+          }
+        }
+      }
+      tab3.measurementLabels = [];
+      tab3.measurementLabelFontSize = 20;
+      for (var ind = 0; ind < 4; ind++) {
+        var offsetCoordX = ind % 2;
+        var offsetCoordY = math.floor(ind / 2);
+        tab3.measurementLabels[ind] = new PointText(new Point(
+          offsetCoordX * size.sizeX / 2,
+          offsetCoordY * size.sizeY / 2 + tab3.measurementLabelFontSize
+        ));
+        tab3.measurementLabels[ind].fillColor = 'black';
+        tab3.measurementLabels[ind].content = tab3.inputColumnLabels[ind];
+        tab3.measurementLabels[ind].fontSize = tab3.measurementLabelFontSize;
+      }
+      return ptGrid;
+    }
+    function sat3_plotSomPts() {
+      for (var i = 0; i < tab3.somW; i++) {
+        for (var j = 0; j < tab3.somH; j++) {
+          // var coordinateArray = math.squeeze(tab3.som.subset(math.index(i,j,[0,1,2,3]))).toArray();
+          var coordinateArray = tab3.som[i][j];
+          var minima = math.min(math.min(tab3.som,0),0);
+          var maxima = math.max(math.max(tab3.som,0),0);
+          
+          for (var ind = 0; ind < 4; ind++) {
+            var measurement = coordinateArray[ind];
+            var measurementMin = minima[ind];
+            var measurementMax = maxima[ind];
+            var color = gradientColor((measurement-measurementMin)/(measurementMax-measurementMin));
+
+            tab3.sat_somPtGrid[i][j][ind].fillColor.red = color.red;
+            tab3.sat_somPtGrid[i][j][ind].fillColor.green = color.green;
+            tab3.sat_somPtGrid[i][j][ind].fillColor.blue = color.blue;
+          }
+        }
+      }
+    }
+    function sat3_saveHistory(iter) {
+      tab3.sat_somPtGridHistory[iter] = {};
+      for (var i = 0; i < tab3.somW; i++) {
+        tab3.sat_somPtGridHistory[iter][i] = {};
+        for (var j = 0; j < tab3.somH; j++) {
+          tab3.sat_somPtGridHistory[iter][i][j] = {};
+          for (var ind = 0; ind < 4; ind++) {
+            tab3.sat_somPtGridHistory[iter][i][j][ind] = {
+              r: tab3.sat_somPtGrid[i][j][ind].fillColor.red,
+              g: tab3.sat_somPtGrid[i][j][ind].fillColor.green,
+              b: tab3.sat_somPtGrid[i][j][ind].fillColor.blue
+            };
+          }
+        }
+      }
+    }
+    function sat3_plotSomFromHistory(ptGrid) {
+      for (var i = 0; i < tab3.somW; i++) {
+        for (var j = 0; j < tab3.somH; j++) {
+          for (var ind = 0; ind < 4; ind++) {
+            tab3.sat_somPtGrid[i][j][ind].fillColor.red = ptGrid[i][j][ind].r;
+            tab3.sat_somPtGrid[i][j][ind].fillColor.green = ptGrid[i][j][ind].g;
+            tab3.sat_somPtGrid[i][j][ind].fillColor.blue = ptGrid[i][j][ind].b;
+          }
+        }
+      }
+    }
+    function sat3_destroyPoints() {
+      for (var i = 0; i < Object.size(tab3.sat_somPtGrid); i++) {
+        for (var j = 0; j < Object.size(tab3.sat_somPtGrid[i]); j++) {
+          for (var ind = 0; ind < 4; ind++) {
+            tab3.sat_somPtGrid[i][j][ind].remove();
+          }
+        }
+      }
+      for (var ind = 0; ind < 4; ind++) {
+        tab3.measurementLabels[ind].remove();
+      }
+    }
+    function sat3_plotSomInitFromHistory() {
+      sat3_destroyPoints();
+      var maxIter = tab3.somIteration - 2;
+      var ptCoordinateGrid = tab3.sat_somPtGridHistory[maxIter];
+
+      size = getCanvasSize("tab3", sizeArgs);
+      view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+      size.sideLength = size.sizeX / tab3.somW * 0.45;
+      size.hex = {};
+      size.hex.countW = tab3.somW + 0.5;
+      size.hex.width = size.sizeX / size.hex.countW * 0.45;
+      size.hex.radius = size.hex.width / math.sqrt(3);
+      size.hex.heightSum = (tab3.somH % 2 === 0)
+        ? tab3.somH*size.hex.radius*3/2+size.hex.radius/2
+        : math.floor(tab3.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+      size.hex.offsetX = size.hex.radius;
+      size.hex.offsetY = size.hex.radius + (size.sizeY*0.45 - size.hex.heightSum)/2;
+
+      var ptGrid = {};
+      for (var i = 0; i < tab3.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab3.somH; j++) {
+          ptGrid[i][j] = {};
+          for (var ind = 0; ind < 4; ind++) {
+            var coordinateArray = ptCoordinateGrid[i][j][ind];
+            var r = coordinateArray.r;
+            var g = coordinateArray.g;
+            var b = coordinateArray.b;
+            
+            var offsetCoordX = ind % 2;
+            var offsetCoordY = math.floor(ind / 2);
+            
+            var offsetX = offsetCoordX * size.sizeX / 2 + size.sizeX*0.1/4;
+            var offsetY = offsetCoordY * size.sizeY / 2 + size.sizeY*0.1/4;
+
+            if (tab3.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX + offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY + offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(
+                i*size.sideLength + offsetX,
+                j*size.sideLength + offsetY,
+                size.sideLength,
+                size.sideLength
+              );
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(r, g, b);
+            ptGrid[i][j][ind] = path;
+          }
+        }
+      }
+      for (var ind = 0; ind < 4; ind++) {
+        var offsetCoordX = ind % 2;
+        var offsetCoordY = math.floor(ind / 2);
+        tab3.measurementLabels[ind] = new PointText(new Point(
+          offsetCoordX * size.sizeX / 2,
+          offsetCoordY * size.sizeY / 2 + tab3.measurementLabelFontSize
+        ));
+        tab3.measurementLabels[ind].fillColor = 'black';
+        tab3.measurementLabels[ind].content = tab3.inputColumnLabels[ind];
+        tab3.measurementLabels[ind].fontSize = tab3.measurementLabelFontSize;
+//         var x = offsetCoordX * size.sizeX / 2 + tab3.measurementLabels[ind].getBounds().width/2;
+//         var y = offsetCoordY * size.sizeY / 2 + tab3.measurementLabels[ind].getBounds().height/2;
+//         tab3.measurementLabels[ind].setPosition(x, y);
+      }
+      return ptGrid;
+    }
+
+    tab3.sat_somPtGrid = sat3_plotSomInit();
+    sat3_saveHistory(0);
+    
+    function onFrame(event) {
+      debug && console.log(tab3.showHistoryIteration, typeof tab3.showHistoryIteration)
+      if (typeof tab3.initFromHistory === "boolean" && tab3.initFromHistory === true) {
+        tab3.sat_somPtGrid = sat3_plotSomInitFromHistory();
+        tab3.initFromHistory = false;
+        if ("undefined" !== typeof tab3.hitMapPaper.redraw) {
+          tab3.hitMapPaper.redraw(tab3.somIteration - 2);
+        }
+        if ("undefined" !== typeof tab3.changeRatePaper.clear) {
+          tab3.changeRatePaper.clear();
+        }
+        if ("undefined" !== typeof tab3.changeRatePaper.redraw) {
+          tab3.changeRatePaper.redraw();
+        }
+        if ("undefined" !== typeof tab3.neighbourhoodRadiusPaper.clear) {
+          tab3.neighbourhoodRadiusPaper.clear();
+        }
+        if ("undefined" !== typeof tab3.neighbourhoodRadiusPaper.redraw) {
+          tab3.neighbourhoodRadiusPaper.redraw();
+        }
+        var bmu = tab3.bmuHistory[tab3.somIteration - 2];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab3");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab3");
+        }
+        return;
+      }
+      if (typeof tab3.showHistoryIteration === "number" && tab3.showHistoryIteration >= 0) {
+        if ("undefined" !== typeof tab3.hitMapPaper.redraw) {
+          tab3.hitMapPaper.redraw(tab3.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab3.changeRatePaper.showIteration) {
+          tab3.changeRatePaper.showIteration(tab3.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab3.neighbourhoodRadiusPaper.showIteration) {
+          tab3.neighbourhoodRadiusPaper.showIteration(tab3.showHistoryIteration);
+        }
+        var historyPtGrid = tab3.sat_somPtGridHistory[tab3.showHistoryIteration];
+        if ("undefined" === typeof historyPtGrid) {
+          tab3.showHistoryIteration = false;
+          return;
+        }
+        sat3_plotSomFromHistory(historyPtGrid);
+        var bmu = tab3.bmuHistory[tab3.showHistoryIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab3");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab3");
+        }
+        tab3.showHistoryIteration = false;
+        return;
+      }
+      if (tab3.somIteration === 2) {
+        $("#resetSomButton_tab3").removeAttr("disabled");
+        $("#trainStopSomButton_tab3").removeAttr("disabled");
+      }
+      if (tab3.somIteration === tab3.maxIterations + 1 || tab3.learningJustFinished) {
+        debug && console.log("maxIterations just surpassed OR learningJustFinished")
+        $("#trainSomButton_tab3").attr('disabled', 'disabled');
+        $("#trainStopSomButton_tab3").attr('disabled', 'disabled');
+        $("#sat_historySliderInput_tab3").slider("enable");
+        $("#tab3 .somConstants").slider("enable");
+        $("#tab3 .inputSelectorWrapper select").removeAttr("disabled");
+        $("#tab3 select[multiple=multiple]").multiselect("enable");
+        $("#tab3 .historyImgContainer img").removeClass("disabled");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").addClass("disabled");
+        saveToLocalStorageHistory("tab3");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").removeClass("disabled");
+        tab3.learningFinished = true;
+        tab3.doIterate = false;
+        tab3.learningJustFinished = false;
+        tab3.somIteration++;
+      }
+      if (tab3.somIteration > tab3.maxIterations || tab3.learningFinished) {
+        debug && console.log("You shall not pass!")
+        return;
+      }
+      if (tab3.resetJustDone) {
+        tab3.resetJustDone = false;
+        tab3.doIterate = false;
+        sat3_destroyPoints();
+        tab3.sat_somPtGrid = sat3_plotSomInit();
+        tab3.sat_somPtGridHistory = [];
+        sat3_saveHistory(0);
+      } else {
+        var doIterateLoc = tab3.doIterate || false;
+        if (doIterateLoc === false) {
+          return;
+        }
+        SomAlgorithmIterationStep(tab3.somIteration, undefined, "tab3");
+        sat3_plotSomPts();
+        if ("undefined" !== typeof tab3.hitMapPaper.redraw) {
+          tab3.hitMapPaper.redraw(tab3.somIteration);
+        }
+        var bmu = tab3.bmuHistory[tab3.somIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab3");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab3");
+        }
+        sat3_saveHistory(tab3.somIteration);
+        $("#counter_tab3 span").html(tab3.somIteration);
+        tab3.somIteration++;
+        $('#sat_historySliderInput_tab3')
+            .slider('setAttribute', 'value', tab3.somIteration - 1)
+            .slider('setAttribute', 'max', tab3.somIteration - 1)
+            .slider('refresh');
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="hitMap_tab3">
+    tab3.hitMapPaper = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer,
+      iteration: undefined
+    };
+    tab3.hitMapPaper.sizeArgs = {};
+    tab3.hitMapPaper.group = new Group();
+
+    tab3.hitMapPaper.init = function() {
+      // clear the old grid //
+      if ("undefined" !== typeof tab3.hitMapPaper.grid && tab3.hitMapPaper.grid.length > 0) {
+        for (var i = 0; i < tab3.hitMapPaper.grid.length; i++) {
+          for (var j = 0; j < tab3.hitMapPaper.grid[i].length; j++) {
+            tab3.hitMapPaper.grid[i][j].remove();
+          }
+        }
+      }
+      
+      // draw a new grid //
+      tab3.hitMapPaper.size = getCanvasSize("tab3", tab3.hitMapPaper.sizeArgs);
+      view.viewSize = new paper.Size(tab3.hitMapPaper.size.sizeX, tab3.hitMapPaper.size.sizeY);
+      tab3.hitMapPaper.size.sideLength = tab3.hitMapPaper.size.sizeX / tab3.somW;
+      tab3.hitMapPaper.size.hex = {};
+      tab3.hitMapPaper.size.hex.countW = tab3.somW + 0.5;
+      tab3.hitMapPaper.size.hex.width = tab3.hitMapPaper.size.sizeX / tab3.hitMapPaper.size.hex.countW;
+      tab3.hitMapPaper.size.hex.radius = tab3.hitMapPaper.size.hex.width / math.sqrt(3);
+      tab3.hitMapPaper.size.hex.heightSum = (tab3.somH % 2 === 0)
+        ? tab3.somH*tab3.hitMapPaper.size.hex.radius*3/2+tab3.hitMapPaper.size.hex.radius/2
+        : math.floor(tab3.somH/2)*3*tab3.hitMapPaper.size.hex.radius+tab3.hitMapPaper.size.hex.radius*5/2;
+      tab3.hitMapPaper.size.hex.offsetX = tab3.hitMapPaper.size.hex.radius;
+      tab3.hitMapPaper.size.hex.offsetY = tab3.hitMapPaper.size.hex.radius + (tab3.hitMapPaper.size.sizeY - tab3.hitMapPaper.size.hex.heightSum)/2;
+      
+      var ptGrid = [];
+      for (var i = 0; i < tab3.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab3.somH; j++) {
+          if (tab3.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab3.hitMapPaper.size.hex.width + tab3.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab3.hitMapPaper.size.hex.radius*3/2 + tab3.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab3.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab3.hitMapPaper.size.hex.radius // radius
+            );
+          } else {
+            var rectangle = new Rectangle(i*tab3.hitMapPaper.size.sideLength, j*tab3.hitMapPaper.size.sideLength, tab3.hitMapPaper.size.sideLength, tab3.hitMapPaper.size.sideLength);
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.strokeColor = "grey";
+          path.strokeWidth = 1;
+          ptGrid[i][j] = path;
+          tab3.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab3.hitMapPaper.grid = ptGrid;
+    }
+    
+    tab3.hitMapPaper.clear = function() {
+      if ("undefined" !== typeof tab3.hitMapPaper.hitMapPts && tab3.hitMapPaper.hitMapPts.length > 0) {
+        for (var i = 0; i < tab3.hitMapPaper.hitMapPts.length; i++) {
+          for (var j = 0; j < tab3.hitMapPaper.hitMapPts[i].length; j++) {
+            if ("undefined" !== typeof tab3.hitMapPaper.hitMapPts[i][j]) {
+              tab3.hitMapPaper.hitMapPts[i][j].remove();
+            }
+          }
+        }
+      }
+    }
+    tab3.hitMapPaper.draw = function(iteration) {
+      if ("undefined" === typeof tab3.hitMapHistory || "undefined" === typeof tab3.hitMapHistory[iteration]) {
+        console.warn("No hitMapHistory for iteration "+iteration);
+        return;
+      }
+      tab3.hitMapPaper.iteration = iteration;
+      var hitMapMax = math.max(tab3.hitMapHistory[iteration].counts);
+      var ptGrid = [];
+      for (var i = 0; i < tab3.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab3.somH; j++) {
+          var hitMapCount = tab3.hitMapHistory[iteration].counts[i][j];
+          if (hitMapCount === 0) {
+            continue;
+          }
+          var scaling = hitMapCount / hitMapMax;
+          if (tab3.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab3.hitMapPaper.size.hex.width + tab3.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab3.hitMapPaper.size.hex.radius*3/2 + tab3.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab3.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab3.hitMapPaper.size.hex.radius * scaling // radius
+            );
+          } else {
+            var offset = (tab3.hitMapPaper.size.sideLength - tab3.hitMapPaper.size.sideLength * scaling)/2;
+            var rectangle = new Rectangle(
+              i*tab3.hitMapPaper.size.sideLength + offset, j*tab3.hitMapPaper.size.sideLength + offset,
+              tab3.hitMapPaper.size.sideLength * scaling, tab3.hitMapPaper.size.sideLength * scaling
+            );
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.fillColor = "grey";
+          if ("undefined" !== typeof tab3.inputLabelColors) {
+            var cntMax = 0;
+            var maxLabels = [];
+            var hitCount = 0;
+            for (var l = 0; l < tab3.inputLabelColors._names.length; l++) {
+              var labelName = tab3.inputLabelColors._names[l];
+              var cnt = tab3.hitMapHistory[iteration].labelCounts[labelName][i][j];
+              if (cnt > 0 && cnt >= cntMax) {
+                if (cnt > cntMax) {
+                  maxLabels = [];
+                  cntMax = cnt;
+                }
+                maxLabels.push(labelName);
+                hitCount++;
+              } else if (cnt > 0) {
+                hitCount++;
+              }
+            }
+            if (maxLabels.length === 1) {
+              var labelName = maxLabels[0];
+              var labelColor = tab3.inputLabelColors[labelName];
+              if ("undefined" === typeof labelColor) {
+                console.log(labelName, tab3.inputLabelColors)
+              } else if (labelColor instanceof Array) {
+                path.fillColor = new Color(labelColor[0], labelColor[1], labelColor[2]);
+              } else {
+                path.fillColor = labelColor;
+              }
+              if (hitCount > 1) {
+                path.strokeWidth = 2;
+                path.strokeColor = "black";
+                path.dashArray = [5, 5];
+              }
+            }
+          } else {
+            path.fillColor = "orange";
+          }
+          path.opacity = 1;
+          ptGrid[i][j] = path;
+          tab3.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab3.hitMapPaper.hitMapPts = ptGrid;
+    }
+    tab3.hitMapPaper.redraw = function(iteration) {
+      tab3.hitMapPaper.clear();
+      tab3.hitMapPaper.draw(iteration);
+    }
+    tab3.hitMapPaper.init();
+    
+    function onMouseUp(event) {
+      if ("undefined" === typeof tab3.inputLabels) {
+        return;
+      }
+      $("#hitMap_tab3_CanvasWrapper .floatingPointLabel").remove();
+      var pts = tab3.hitMapPaper.grid;
+      if ("undefined" === typeof pts) {
+        return;
+      }
+      var pos = event.point;
+      var canvasWidth = $("#hitMap_tab3").width();
+      var scale = tab3.hitMapPaper.size.sizeX / canvasWidth;
+      if (tab3.GridDistanceType === "hexagonal_neighbourhood_2d") {
+        var r = tab3.hitMapPaper.size.hex.radius;
+      } else {
+        var r = tab3.hitMapPaper.size.sideLength / 2;
+      }
+      pos.x *= scale;
+      pos.y *= scale;
+      var usedLabels = {};
+      for (var i = 0; i < pts.length; i++) {
+        for (var j = 0; j < pts[i].length; j++) {
+          var ptPos = pts[i][j].position;
+          if (math.distance([pos.x, pos.y], [ptPos.x, ptPos.y]) < r) {
+            var labelTexts = [];
+            if ("undefined" === typeof tab3.hitMapHistory.length === 0 || "undefined" === typeof tab3.hitMapHistory[tab3.hitMapPaper.iteration]) {
+              break;
+            }
+            if ("undefined" === typeof tab3.inputLabels) {
+              var cnt = tab3.hitMapHistory[tab3.hitMapPaper.iteration].counts[i][j];
+              if (cnt > 0) {
+                var language = $("#language_switcher").val().toLowerCase();
+                var languageID = lang_ids[language];
+                var dictionary = lang_strings;
+                if (dictionary.hasOwnProperty(languageID) && "undefined" !== typeof dictionary[languageID].count) {
+                  var countWord = dictionary[languageID].count;
+                } else {
+                  var countWord = "Počet";
+                }
+                labelTexts.push("<span data-translate=\"count\">" + countWord + "</span>: " + cnt);
+              }
+            } else {
+              for (var l = 0; l < tab3.inputLabels.length; l++) {
+                var labelName = tab3.inputLabels[l];
+                if ("undefined" !== typeof usedLabels[labelName]) {
+                  continue;
+                }
+                usedLabels[labelName] = true;
+                var cnt = tab3.hitMapHistory[tab3.hitMapPaper.iteration].labelCounts[labelName][i][j];
+                if (cnt > 0) {
+                  labelTexts.push(labelName + ": " + cnt);
+                }
+              }
+            }
+            if (labelTexts.length > 0) {
+              labelText = labelTexts.join("<br>\n");
+              tab3.hitMapPaper.ptLabel = $('<span class="floatingPointLabel">'+labelText+'</span>')
+                .appendTo($("#hitMap_tab3_CanvasWrapper"))
+                .css("top", +event.point.y)
+                .css("left", +event.point.x);
+              var curTabID = "tab3";
+              if ("undefined" === window[curTabID].labelTimeoutHandle) {
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              if (window[curTabID].labelTimeoutHandle !== false) {
+                clearTimeout(window[curTabID].labelTimeoutHandle);
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              window[curTabID].labelTimeoutHandle = setTimeout(function() {
+                $("#hitMap_"+curTabID+"_CanvasWrapper .floatingPointLabel").remove();
+              }, labelTimeout);
+            }
+            break;
+          }
+        }
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="changeRate_tab3">
+    tab3.changeRatePaper = {};
+    tab3.changeRatePaper.changeRatePoints = [];
+    tab3.changeRatePaper.height = 100;
+    tab3.changeRatePaper.width = 500;
+    view.viewSize = new paper.Size(tab3.changeRatePaper.width, tab3.changeRatePaper.height);
+    tab3.changeRatePaper.scaleY = 1;
+    tab3.changeRatePaper.scaleX = 1;
+    tab3.changeRatePaper.path = new Path();
+    tab3.changeRatePaper.path.strokeColor = 'red';
+//     tab3.changeRatePaper.verticalLine = new Path();
+    tab3.changeRatePaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab3.changeRatePaper.height));
+    tab3.changeRatePaper.verticalLine.strokeColor = 'black';
+    tab3.changeRatePaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab3.changeRatePaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab3.changeRatePaper.intersectionLabel.justification = 'center';
+    tab3.changeRatePaper.intersectionLabel.fillColor = 'black';
+    tab3.changeRatePaper.intersectionLabel.content = '';
+    tab3.changeRatePaper.intersectionLabel.fontSize = '14px';
+    
+    tab3.changeRatePaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      if ("number" === typeof content) {
+        if (content < 1) {
+          content = math.round(content, tab3.changeRateThreshold);
+        } else {
+          content = math.round(content, 2);
+        }
+      }
+      tab3.changeRatePaper.intersectionLabel.content = content;
+      tab3.changeRatePaper.intersectionLabel.position.x = x;
+      tab3.changeRatePaper.intersectionLabel.position.y = y;
+      var bounds = tab3.changeRatePaper.intersectionLabel.getBounds();
+      if (x > tab3.changeRatePaper.width/2) {
+        tab3.changeRatePaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab3.changeRatePaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab3.changeRatePaper.height/2) {
+        tab3.changeRatePaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab3.changeRatePaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab3.changeRatePaper.clear = function() {
+      tab3.changeRatePaper.verticalLine.position.x = 0;
+      while (tab3.changeRatePaper.path.segments.length > 0) {
+        tab3.changeRatePaper.path.segments[0].remove();
+      }
+      tab3.changeRatePaper.changeRatePoints = [];
+      tab3.changeRatePaper.intersection.position.x = 0;
+      tab3.changeRatePaper.intersection.position.y = 0;
+      tab3.changeRatePaper.setIntersectionLabel('', 0, 0);
+    }
+    tab3.changeRatePaper.redraw = function() {
+      tab3.changeRatePaper.clear();
+      tab3.changeRatePaper.max = math.max(tab3.changeRateHistory);
+      tab3.changeRatePaper.scaleX = tab3.changeRatePaper.width / tab3.maxIterations;
+      tab3.changeRatePaper.scaleY = tab3.changeRatePaper.height / tab3.changeRatePaper.max;
+      tab3.changeRatePaper.verticalLine.position.x = (tab3.changeRateHistory.length-1) * tab3.changeRatePaper.scaleX;
+      for (var i = 0; i < tab3.changeRateHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab3.changeRatePaper.changeRatePoints[iter]
+            && "undefined" !== typeof tab3.changeRateHistory[iter]) {
+          var x = iter * tab3.changeRatePaper.scaleX;
+          var y = tab3.changeRatePaper.scaleY * (tab3.changeRatePaper.max - tab3.changeRateHistory[iter]);
+          tab3.changeRatePaper.path.add(new Point(x, y));
+          tab3.changeRatePaper.changeRatePoints[iter] = iter;
+          tab3.changeRatePaper.setIntersectionLabel(
+            tab3.changeRateHistory[iter],
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab3.changeRatePaper.showIteration = function(iteration) {
+      tab3.changeRatePaper.verticalLine.position.x = iteration * tab3.changeRatePaper.scaleX;
+      var intersections = tab3.changeRatePaper.verticalLine.getIntersections(tab3.changeRatePaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab3.changeRatePaper.intersection.position.x = intersections[0].point.x;
+        tab3.changeRatePaper.intersection.position.y = intersections[0].point.y;
+        tab3.changeRatePaper.setIntersectionLabel(
+          tab3.changeRateHistory[iteration],
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab3.doIterate) {
+          return;
+        }
+        if (tab3.changeRateHistory.length > 1) {
+          tab3.changeRatePaper.max = math.max(tab3.changeRateHistory);
+          tab3.changeRatePaper.scaleX = tab3.changeRatePaper.width / tab3.maxIterations;
+          tab3.changeRatePaper.scaleY = tab3.changeRatePaper.height / tab3.changeRatePaper.max;
+//           var iter = tab3.somIteration - 1;
+          for (var iter = tab3.changeRatePaper.changeRatePoints.length - 1; iter < tab3.changeRateHistory.length; iter++) {
+            if ("undefined" === typeof tab3.changeRatePaper.changeRatePoints[iter]
+                && "undefined" !== typeof tab3.changeRateHistory[iter]) {
+              var x = iter * tab3.changeRatePaper.scaleX;
+              var y = tab3.changeRatePaper.scaleY * (tab3.changeRatePaper.max - tab3.changeRateHistory[iter]);
+              tab3.changeRatePaper.verticalLine.position.x = x;
+              tab3.changeRatePaper.path.add(new Point(x, y));
+              tab3.changeRatePaper.changeRatePoints[iter] = iter;
+              tab3.changeRatePaper.intersection.position.x = x;
+              tab3.changeRatePaper.intersection.position.y = y;
+              tab3.changeRatePaper.setIntersectionLabel(
+                tab3.changeRateHistory[iter],
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="neighbourhoodRadius_tab3">
+    tab3.neighbourhoodRadiusPaper = {};
+    tab3.neighbourhoodRadiusPaper.points = [];
+    tab3.neighbourhoodRadiusPaper.height = 100;
+    tab3.neighbourhoodRadiusPaper.width = 500;
+    view.viewSize = new paper.Size(tab3.neighbourhoodRadiusPaper.width, tab3.neighbourhoodRadiusPaper.height);
+    tab3.neighbourhoodRadiusPaper.scaleY = 1;
+    tab3.neighbourhoodRadiusPaper.scaleX = 1;
+    tab3.neighbourhoodRadiusPaper.path = new Path();
+    tab3.neighbourhoodRadiusPaper.path.strokeColor = 'red';
+//     tab3.neighbourhoodRadiusPaper.verticalLine = new Path();
+    tab3.neighbourhoodRadiusPaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab3.neighbourhoodRadiusPaper.height));
+    tab3.neighbourhoodRadiusPaper.verticalLine.strokeColor = 'black';
+    tab3.neighbourhoodRadiusPaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab3.neighbourhoodRadiusPaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab3.neighbourhoodRadiusPaper.intersectionLabel.justification = 'center';
+    tab3.neighbourhoodRadiusPaper.intersectionLabel.fillColor = 'black';
+    tab3.neighbourhoodRadiusPaper.intersectionLabel.content = '';
+    tab3.neighbourhoodRadiusPaper.intersectionLabel.fontSize = '14px';
+    
+    tab3.neighbourhoodRadiusPaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      tab3.neighbourhoodRadiusPaper.intersectionLabel.content = content;
+      tab3.neighbourhoodRadiusPaper.intersectionLabel.position.x = x;
+      tab3.neighbourhoodRadiusPaper.intersectionLabel.position.y = y;
+      var bounds = tab3.neighbourhoodRadiusPaper.intersectionLabel.getBounds();
+      if (x > tab3.neighbourhoodRadiusPaper.width/2) {
+        tab3.neighbourhoodRadiusPaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab3.neighbourhoodRadiusPaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab3.neighbourhoodRadiusPaper.height/2) {
+        tab3.neighbourhoodRadiusPaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab3.neighbourhoodRadiusPaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab3.neighbourhoodRadiusPaper.clear = function() {
+      tab3.neighbourhoodRadiusPaper.verticalLine.position.x = 0;
+      while (tab3.neighbourhoodRadiusPaper.path.segments.length > 0) {
+        tab3.neighbourhoodRadiusPaper.path.segments[0].remove();
+      }
+      tab3.neighbourhoodRadiusPaper.points = [];
+      tab3.neighbourhoodRadiusPaper.intersection.position.x = 0;
+      tab3.neighbourhoodRadiusPaper.intersection.position.y = 0;
+      tab3.neighbourhoodRadiusPaper.setIntersectionLabel('', 0, 0);
+    }
+    tab3.neighbourhoodRadiusPaper.redraw = function() {
+      tab3.neighbourhoodRadiusPaper.clear();
+      tab3.neighbourhoodRadiusPaper.max = tab3.mapRadius+1;
+      tab3.neighbourhoodRadiusPaper.scaleX = tab3.neighbourhoodRadiusPaper.width / tab3.maxIterations;
+      tab3.neighbourhoodRadiusPaper.scaleY = tab3.neighbourhoodRadiusPaper.height / tab3.neighbourhoodRadiusPaper.max;
+      tab3.neighbourhoodRadiusPaper.verticalLine.position.x = (tab3.bmuHistory.length-1) * tab3.neighbourhoodRadiusPaper.scaleX;
+      for (var i = 0; i < tab3.bmuHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab3.neighbourhoodRadiusPaper.points[iter]
+            && "undefined" !== typeof tab3.bmuHistory[iter]) {
+          var x = iter * tab3.neighbourhoodRadiusPaper.scaleX;
+          var y = tab3.neighbourhoodRadiusPaper.scaleY * (tab3.neighbourhoodRadiusPaper.max - tab3.bmuHistory[iter].neighbourhoodRadius);
+          tab3.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+          tab3.neighbourhoodRadiusPaper.points[iter] = iter;
+          tab3.neighbourhoodRadiusPaper.setIntersectionLabel(
+            tab3.bmuHistory[iter].neighbourhoodRadius,
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab3.neighbourhoodRadiusPaper.showIteration = function(iteration) {
+      tab3.neighbourhoodRadiusPaper.verticalLine.position.x = iteration * tab3.neighbourhoodRadiusPaper.scaleX;
+      var intersections = tab3.neighbourhoodRadiusPaper.verticalLine.getIntersections(tab3.neighbourhoodRadiusPaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab3.neighbourhoodRadiusPaper.intersection.position.x = intersections[0].point.x;
+        tab3.neighbourhoodRadiusPaper.intersection.position.y = intersections[0].point.y;
+        tab3.neighbourhoodRadiusPaper.setIntersectionLabel(
+          tab3.bmuHistory[iteration].neighbourhoodRadius,
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab3.doIterate) {
+          return;
+        }
+        if (tab3.bmuHistory.length > 1) {
+          tab3.neighbourhoodRadiusPaper.max = tab3.mapRadius+1;
+          tab3.neighbourhoodRadiusPaper.scaleX = tab3.neighbourhoodRadiusPaper.width / tab3.maxIterations;
+          tab3.neighbourhoodRadiusPaper.scaleY = tab3.neighbourhoodRadiusPaper.height / tab3.neighbourhoodRadiusPaper.max;
+//           var iter = tab3.somIteration - 1;
+          for (var iter = tab3.neighbourhoodRadiusPaper.points.length - 1; iter < tab3.bmuHistory.length; iter++) {
+            if ("undefined" === typeof tab3.neighbourhoodRadiusPaper.points[iter]
+                && "undefined" !== typeof tab3.bmuHistory[iter]) {
+              var x = iter * tab3.neighbourhoodRadiusPaper.scaleX;
+              var y = tab3.neighbourhoodRadiusPaper.scaleY * (tab3.neighbourhoodRadiusPaper.max - tab3.bmuHistory[iter].neighbourhoodRadius);
+              tab3.neighbourhoodRadiusPaper.verticalLine.position.x = x;
+              tab3.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+              tab3.neighbourhoodRadiusPaper.points[iter] = iter;
+              tab3.neighbourhoodRadiusPaper.intersection.position.x = x;
+              tab3.neighbourhoodRadiusPaper.intersection.position.y = y;
+              tab3.neighbourhoodRadiusPaper.setIntersectionLabel(
+                tab3.bmuHistory[iter].neighbourhoodRadius,
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="somTraining_tab4">
+    tab4.somTraining = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer
+    };
+    var sizeArgs = {
+      "scaleX": 50,
+      "scaleY": 50
+    };
+    var size;
+    
+    function sat4_plotSomInit() {
+      size = getCanvasSize("tab4", sizeArgs);
+      view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+      size.sideLength = size.sizeX / tab4.somW * 0.3;
+      size.hex = {};
+      size.hex.countW = tab4.somW + 0.5;
+      size.hex.width = size.sizeX / size.hex.countW * 0.3;
+      size.hex.radius = size.hex.width / math.sqrt(3);
+      size.hex.heightSum = (tab4.somH % 2 === 0)
+        ? tab4.somH*size.hex.radius*3/2+size.hex.radius/2
+        : math.floor(tab4.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+      size.hex.offsetX = size.hex.radius;
+      size.hex.offsetY = size.hex.radius + (size.sizeY*0.3 - size.hex.heightSum)/2;
+      
+      var ptGrid = {};
+      for (var i = 0; i < tab4.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab4.somH; j++) {
+          // var coordinateArray = math.squeeze(tab4.som.subset(math.index(i,j,[0,1,2,3,4,5]))).toArray();
+          var coordinateArray = tab4.som[i][j];
+          var minima = math.min(math.min(tab4.som,0),0);
+          var maxima = math.max(math.max(tab4.som,0),0);
+          
+          ptGrid[i][j] = {};
+          for (var ind = 0; ind < 6; ind++) {
+            var measurement = coordinateArray[ind];
+            var measurementMin = minima[ind];
+            var measurementMax = maxima[ind];
+            
+            var offsetCoordX = ind % 3;
+            var offsetCoordY = math.floor(ind / 3);
+            
+            var offsetX = offsetCoordX * size.sizeX / 3 + size.sizeX*0.1/6;
+            var offsetY = offsetCoordY * size.sizeY / 2 + size.sizeY*0.4/4;
+                        
+            var color = gradientColor((measurement-measurementMin)/(measurementMax-measurementMin));
+            
+            if (tab4.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX + offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY + offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(
+                i*size.sideLength + offsetX,
+                j*size.sideLength + offsetY,
+                size.sideLength,
+                size.sideLength
+              );
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(color.red, color.green, color.blue);
+            ptGrid[i][j][ind] = path;
+          }
+        }
+      }
+      tab4.measurementLabels = [];
+      tab4.measurementLabelFontSize = 20;
+      for (var ind = 0; ind < 6; ind++) {
+        var offsetCoordX = ind % 3;
+        var offsetCoordY = math.floor(ind / 3);
+        tab4.measurementLabels[ind] = new PointText(new Point(
+          offsetCoordX * size.sizeX / 3,
+          offsetCoordY * size.sizeY / 2 + tab4.measurementLabelFontSize
+        ));
+        tab4.measurementLabels[ind].fillColor = 'black';
+        tab4.measurementLabels[ind].content = tab4.inputColumnLabels[ind];
+        tab4.measurementLabels[ind].fontSize = tab4.measurementLabelFontSize;
+      }
+      return ptGrid;
+    }
+    function sat4_plotSomPts() {
+      for (var i = 0; i < tab4.somW; i++) {
+        for (var j = 0; j < tab4.somH; j++) {
+          // var coordinateArray = math.squeeze(tab4.som.subset(math.index(i,j,[0,1,2,3,4,5]))).toArray();
+          var coordinateArray = tab4.som[i][j];
+          var minima = math.min(math.min(tab4.som,0),0);
+          var maxima = math.max(math.max(tab4.som,0),0);
+          
+          for (var ind = 0; ind < 6; ind++) {
+            var measurement = coordinateArray[ind];
+            var measurementMin = minima[ind];
+            var measurementMax = maxima[ind];
+            var color = gradientColor((measurement-measurementMin)/(measurementMax-measurementMin));
+
+            tab4.sat_somPtGrid[i][j][ind].fillColor.red = color.red;
+            tab4.sat_somPtGrid[i][j][ind].fillColor.green = color.green;
+            tab4.sat_somPtGrid[i][j][ind].fillColor.blue = color.blue;
+          }
+        }
+      }
+    }
+    function sat4_saveHistory(iter) {
+      tab4.sat_somPtGridHistory[iter] = {};
+      for (var i = 0; i < tab4.somW; i++) {
+        tab4.sat_somPtGridHistory[iter][i] = {};
+        for (var j = 0; j < tab4.somH; j++) {
+          tab4.sat_somPtGridHistory[iter][i][j] = {};
+          for (var ind = 0; ind < 6; ind++) {
+            tab4.sat_somPtGridHistory[iter][i][j][ind] = {
+              r: tab4.sat_somPtGrid[i][j][ind].fillColor.red,
+              g: tab4.sat_somPtGrid[i][j][ind].fillColor.green,
+              b: tab4.sat_somPtGrid[i][j][ind].fillColor.blue
+            };
+          }
+        }
+      }
+    }
+    function sat4_plotSomFromHistory(ptGrid) {
+      for (var i = 0; i < tab4.somW; i++) {
+        for (var j = 0; j < tab4.somH; j++) {
+          for (var ind = 0; ind < 6; ind++) {
+            tab4.sat_somPtGrid[i][j][ind].fillColor.red = ptGrid[i][j][ind].r;
+            tab4.sat_somPtGrid[i][j][ind].fillColor.green = ptGrid[i][j][ind].g;
+            tab4.sat_somPtGrid[i][j][ind].fillColor.blue = ptGrid[i][j][ind].b;
+          }
+        }
+      }
+    }
+    function sat4_destroyPoints() {
+      for (var i = 0; i < Object.size(tab4.sat_somPtGrid); i++) {
+        for (var j = 0; j < Object.size(tab4.sat_somPtGrid[i]); j++) {
+          for (var ind = 0; ind < 6; ind++) {
+            tab4.sat_somPtGrid[i][j][ind].remove();
+          }
+        }
+      }
+      for (var ind = 0; ind < 6; ind++) {
+        tab4.measurementLabels[ind].remove();
+      }
+    }
+    function sat4_plotSomInitFromHistory() {
+      sat4_destroyPoints();
+      var maxIter = tab4.somIteration - 2;
+      var ptCoordinateGrid = tab4.sat_somPtGridHistory[maxIter];
+
+      size = getCanvasSize("tab4", sizeArgs);
+      view.viewSize = new paper.Size(size.sizeX,size.sizeY);
+      size.sideLength = size.sizeX / tab4.somW * 0.3;
+      size.hex = {};
+      size.hex.countW = tab4.somW + 0.5;
+      size.hex.width = size.sizeX / size.hex.countW * 0.3;
+      size.hex.radius = size.hex.width / math.sqrt(3);
+      size.hex.heightSum = (tab4.somH % 2 === 0)
+        ? tab4.somH*size.hex.radius*3/2+size.hex.radius/2
+        : math.floor(tab4.somH/2)*3*size.hex.radius+size.hex.radius*5/2;
+      size.hex.offsetX = size.hex.radius;
+      size.hex.offsetY = size.hex.radius + (size.sizeY*0.3 - size.hex.heightSum)/2;
+
+      var ptGrid = {};
+      for (var i = 0; i < tab4.somW; i++) {
+        ptGrid[i] = {};
+        for (var j = 0; j < tab4.somH; j++) {
+          ptGrid[i][j] = {};
+          for (var ind = 0; ind < 6; ind++) {
+            var coordinateArray = ptCoordinateGrid[i][j][ind];
+            var r = coordinateArray.r;
+            var g = coordinateArray.g;
+            var b = coordinateArray.b;
+            
+            var offsetCoordX = ind % 3;
+            var offsetCoordY = math.floor(ind / 3);
+            
+            var offsetX = offsetCoordX * size.sizeX / 3 + size.sizeX*0.1/6;
+            var offsetY = offsetCoordY * size.sizeY / 2 + size.sizeY*0.4/4;
+
+            if (tab4.GridDistanceType === "hexagonal_neighbourhood_2d") {
+              var hexCenterX = i*size.hex.width + size.hex.offsetX + offsetX;
+              var hexCenterY = j*size.hex.radius*3/2 + size.hex.offsetY + offsetY;
+              if (j%2 === 1) {
+                hexCenterX += size.hex.width/2;
+              }
+              var path = new Path.RegularPolygon(
+                new Point(
+                  hexCenterX,
+                  hexCenterY),
+                6, // numSides
+                size.hex.radius // radius
+              );
+            } else {
+              var rectangle = new Rectangle(
+                i*size.sideLength + offsetX,
+                j*size.sideLength + offsetY,
+                size.sideLength,
+                size.sideLength
+              );
+              var path = new Path.Rectangle(rectangle);
+            }
+            path.fillColor = new Color(r, g, b);
+            ptGrid[i][j][ind] = path;
+          }
+        }
+      }
+      for (var ind = 0; ind < 6; ind++) {
+        var offsetCoordX = ind % 3;
+        var offsetCoordY = math.floor(ind / 3);
+        tab4.measurementLabels[ind] = new PointText(new Point(
+          offsetCoordX * size.sizeX / 3,
+          offsetCoordY * size.sizeY / 2 + tab4.measurementLabelFontSize
+        ));
+        tab4.measurementLabels[ind].fillColor = 'black';
+        tab4.measurementLabels[ind].content = tab4.inputColumnLabels[ind];
+        tab4.measurementLabels[ind].fontSize = tab4.measurementLabelFontSize;
+      }
+      return ptGrid;
+    }
+
+    tab4.sat_somPtGrid = sat4_plotSomInit();
+    sat4_saveHistory(0);
+    
+    function onFrame(event) {
+      debug && console.log(tab4.showHistoryIteration, typeof tab4.showHistoryIteration)
+      if (typeof tab4.initFromHistory === "boolean" && tab4.initFromHistory === true) {
+        tab4.sat_somPtGrid = sat4_plotSomInitFromHistory();
+        tab4.initFromHistory = false;
+        if ("undefined" !== typeof tab4.hitMapPaper.redraw) {
+          tab4.hitMapPaper.redraw(tab4.somIteration - 2);
+        }
+        if ("undefined" !== typeof tab4.changeRatePaper.clear) {
+          tab4.changeRatePaper.clear();
+        }
+        if ("undefined" !== typeof tab4.changeRatePaper.redraw) {
+          tab4.changeRatePaper.redraw();
+        }
+        if ("undefined" !== typeof tab4.neighbourhoodRadiusPaper.clear) {
+          tab4.neighbourhoodRadiusPaper.clear();
+        }
+        if ("undefined" !== typeof tab4.neighbourhoodRadiusPaper.redraw) {
+          tab4.neighbourhoodRadiusPaper.redraw();
+        }
+        var bmu = tab4.bmuHistory[tab4.somIteration - 2];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab4");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab4");
+        }
+        return;
+      }
+      if (typeof tab4.showHistoryIteration === "number" && tab4.showHistoryIteration >= 0) {
+        if ("undefined" !== typeof tab4.hitMapPaper.redraw) {
+          tab4.hitMapPaper.redraw(tab4.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab4.changeRatePaper.showIteration) {
+          tab4.changeRatePaper.showIteration(tab4.showHistoryIteration);
+        }
+        if ("undefined" !== typeof tab4.neighbourhoodRadiusPaper.showIteration) {
+          tab4.neighbourhoodRadiusPaper.showIteration(tab4.showHistoryIteration);
+        }
+        var historyPtGrid = tab4.sat_somPtGridHistory[tab4.showHistoryIteration];
+        if ("undefined" === typeof historyPtGrid) {
+          tab4.showHistoryIteration = false;
+          return;
+        }
+        sat4_plotSomFromHistory(historyPtGrid);
+        var bmu = tab4.bmuHistory[tab4.showHistoryIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab4");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab4");
+        }
+        tab4.showHistoryIteration = false;
+        return;
+      }
+      if (tab4.somIteration === 2) {
+        $("#resetSomButton_tab4").removeAttr("disabled");
+        $("#trainStopSomButton_tab4").removeAttr("disabled");
+      }
+      if (tab4.somIteration === tab4.maxIterations + 1 || tab4.learningJustFinished) {
+        debug && console.log("maxIterations just surpassed OR learningJustFinished")
+        $("#trainSomButton_tab4").attr('disabled', 'disabled');
+        $("#trainStopSomButton_tab4").attr('disabled', 'disabled');
+        $("#sat_historySliderInput_tab4").slider("enable");
+        $("#tab4 .somConstants").slider("enable");
+        $("#tab4 .inputSelectorWrapper select").removeAttr("disabled");
+        $("#tab4 select[multiple=multiple]").multiselect("enable");
+        $("#tab4 .historyImgContainer img").removeClass("disabled");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").addClass("disabled");
+        saveToLocalStorageHistory("tab4");
+        if (window.saveToLocalStorage || window.saveOnServer) $("body").removeClass("disabled");
+        tab4.learningFinished = true;
+        tab4.doIterate = false;
+        tab4.learningJustFinished = false;
+        tab4.somIteration++;
+      }
+      if (tab4.somIteration > tab4.maxIterations || tab4.learningFinished) {
+        debug && console.log("You shall not pass!")
+        return;
+      }
+      if (tab4.resetJustDone) {
+        tab4.resetJustDone = false;
+        tab4.doIterate = false;
+        sat4_destroyPoints();
+        tab4.sat_somPtGrid = sat4_plotSomInit();
+        tab4.sat_somPtGridHistory = [];
+        sat4_saveHistory(0);
+      } else {
+        var doIterateLoc = tab4.doIterate || false;
+        if (doIterateLoc === false) {
+          return;
+        }
+        SomAlgorithmIterationStep(tab4.somIteration, undefined, "tab4");
+        sat4_plotSomPts();
+        if ("undefined" !== typeof tab4.hitMapPaper.redraw) {
+          tab4.hitMapPaper.redraw(tab4.somIteration);
+        }
+        var bmu = tab4.bmuHistory[tab4.somIteration];
+        if ("undefined" === typeof bmu) {
+          showNodesWithinGridDistanceClear("tab4");
+        } else {
+          showNodesWithinGridDistance(bmu.i, bmu.j, bmu.neighbourhoodRadius, "tab4");
+        }
+        sat4_saveHistory(tab4.somIteration);
+        $("#counter_tab4 span").html(tab4.somIteration);
+        tab4.somIteration++;
+        $('#sat_historySliderInput_tab4')
+            .slider('setAttribute', 'value', tab4.somIteration - 1)
+            .slider('setAttribute', 'max', tab4.somIteration - 1)
+            .slider('refresh');
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="hitMap_tab4">
+    tab4.hitMapPaper = {
+      paper: paper,
+      project: paper.project,
+      activeLayer: paper.project.activeLayer,
+      iteration: undefined
+    };
+    tab4.hitMapPaper.sizeArgs = {};
+    tab4.hitMapPaper.group = new Group();
+
+    tab4.hitMapPaper.init = function() {
+      // clear the old grid //
+      if ("undefined" !== typeof tab4.hitMapPaper.grid && tab4.hitMapPaper.grid.length > 0) {
+        for (var i = 0; i < tab4.hitMapPaper.grid.length; i++) {
+          for (var j = 0; j < tab4.hitMapPaper.grid[i].length; j++) {
+            tab4.hitMapPaper.grid[i][j].remove();
+          }
+        }
+      }
+      
+      // draw a new grid //
+      tab4.hitMapPaper.size = getCanvasSize("tab4", tab4.hitMapPaper.sizeArgs);
+      view.viewSize = new paper.Size(tab4.hitMapPaper.size.sizeX, tab4.hitMapPaper.size.sizeY);
+      tab4.hitMapPaper.size.sideLength = tab4.hitMapPaper.size.sizeX / tab4.somW;
+      tab4.hitMapPaper.size.hex = {};
+      tab4.hitMapPaper.size.hex.countW = tab4.somW + 0.5;
+      tab4.hitMapPaper.size.hex.width = tab4.hitMapPaper.size.sizeX / tab4.hitMapPaper.size.hex.countW;
+      tab4.hitMapPaper.size.hex.radius = tab4.hitMapPaper.size.hex.width / math.sqrt(3);
+      tab4.hitMapPaper.size.hex.heightSum = (tab4.somH % 2 === 0)
+        ? tab4.somH*tab4.hitMapPaper.size.hex.radius*3/2+tab4.hitMapPaper.size.hex.radius/2
+        : math.floor(tab4.somH/2)*3*tab4.hitMapPaper.size.hex.radius+tab4.hitMapPaper.size.hex.radius*5/2;
+      tab4.hitMapPaper.size.hex.offsetX = tab4.hitMapPaper.size.hex.radius;
+      tab4.hitMapPaper.size.hex.offsetY = tab4.hitMapPaper.size.hex.radius + (tab4.hitMapPaper.size.sizeY - tab4.hitMapPaper.size.hex.heightSum)/2;
+      
+      var ptGrid = [];
+      for (var i = 0; i < tab4.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab4.somH; j++) {
+          if (tab4.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab4.hitMapPaper.size.hex.width + tab4.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab4.hitMapPaper.size.hex.radius*3/2 + tab4.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab4.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab4.hitMapPaper.size.hex.radius // radius
+            );
+          } else {
+            var rectangle = new Rectangle(i*tab4.hitMapPaper.size.sideLength, j*tab4.hitMapPaper.size.sideLength, tab4.hitMapPaper.size.sideLength, tab4.hitMapPaper.size.sideLength);
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.strokeColor = "grey";
+          path.strokeWidth = 1;
+          ptGrid[i][j] = path;
+          tab4.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab4.hitMapPaper.grid = ptGrid;
+    }
+    
+    tab4.hitMapPaper.clear = function() {
+      if ("undefined" !== typeof tab4.hitMapPaper.hitMapPts && tab4.hitMapPaper.hitMapPts.length > 0) {
+        for (var i = 0; i < tab4.hitMapPaper.hitMapPts.length; i++) {
+          for (var j = 0; j < tab4.hitMapPaper.hitMapPts[i].length; j++) {
+            if ("undefined" !== typeof tab4.hitMapPaper.hitMapPts[i][j]) {
+              tab4.hitMapPaper.hitMapPts[i][j].remove();
+            }
+          }
+        }
+      }
+    }
+    tab4.hitMapPaper.draw = function(iteration) {
+      if ("undefined" === typeof tab4.hitMapHistory || "undefined" === typeof tab4.hitMapHistory[iteration]) {
+        console.warn("No hitMapHistory for iteration "+iteration);
+        return;
+      }
+      tab4.hitMapPaper.iteration = iteration;
+      var hitMapMax = math.max(tab4.hitMapHistory[iteration].counts);
+      var ptGrid = [];
+      for (var i = 0; i < tab4.somW; i++) {
+        ptGrid[i] = [];
+        for (var j = 0; j < tab4.somH; j++) {
+          var hitMapCount = tab4.hitMapHistory[iteration].counts[i][j];
+          if (hitMapCount === 0) {
+            continue;
+          }
+          var scaling = hitMapCount / hitMapMax;
+          if (tab4.GridDistanceType === "hexagonal_neighbourhood_2d") {
+            var hexCenterX = i*tab4.hitMapPaper.size.hex.width + tab4.hitMapPaper.size.hex.offsetX;
+            var hexCenterY = j*tab4.hitMapPaper.size.hex.radius*3/2 + tab4.hitMapPaper.size.hex.offsetY;
+            if (j%2 === 1) {
+              hexCenterX += tab4.hitMapPaper.size.hex.width/2;
+            }
+            var path = new Path.RegularPolygon(
+              new Point(
+                hexCenterX,
+                hexCenterY),
+              6, // numSides
+              tab4.hitMapPaper.size.hex.radius * scaling // radius
+            );
+          } else {
+            var offset = (tab4.hitMapPaper.size.sideLength - tab4.hitMapPaper.size.sideLength * scaling)/2;
+            var rectangle = new Rectangle(
+              i*tab4.hitMapPaper.size.sideLength + offset, j*tab4.hitMapPaper.size.sideLength + offset,
+              tab4.hitMapPaper.size.sideLength * scaling, tab4.hitMapPaper.size.sideLength * scaling
+            );
+            var path = new Path.Rectangle(rectangle);
+          }
+          path.fillColor = "grey";
+          if ("undefined" !== typeof tab4.inputLabelColors) {
+            var cntMax = 0;
+            var maxLabels = [];
+            var hitCount = 0;
+            for (var l = 0; l < tab4.inputLabelColors._names.length; l++) {
+              var labelName = tab4.inputLabelColors._names[l];
+              var cnt = tab4.hitMapHistory[iteration].labelCounts[labelName][i][j];
+              if (cnt > 0 && cnt >= cntMax) {
+                if (cnt > cntMax) {
+                  maxLabels = [];
+                  cntMax = cnt;
+                }
+                maxLabels.push(labelName);
+                hitCount++;
+              } else if (cnt > 0) {
+                hitCount++;
+              }
+            }
+            if (maxLabels.length === 1) {
+              var labelName = maxLabels[0];
+              var labelColor = tab4.inputLabelColors[labelName];
+              if ("undefined" === typeof labelColor) {
+                console.log(labelName, tab4.inputLabelColors)
+              } else if (labelColor instanceof Array) {
+                path.fillColor = new Color(labelColor[0], labelColor[1], labelColor[2]);
+              } else {
+                path.fillColor = labelColor;
+              }
+              if (hitCount > 1) {
+                path.strokeWidth = 2;
+                path.strokeColor = "black";
+                path.dashArray = [5, 5];
+              }
+            }
+          } else {
+            path.fillColor = "orange";
+          }
+          path.opacity = 1;
+          ptGrid[i][j] = path;
+          tab4.hitMapPaper.group.addChild(path);
+        }
+      }
+      tab4.hitMapPaper.hitMapPts = ptGrid;
+    }
+    tab4.hitMapPaper.redraw = function(iteration) {
+      tab4.hitMapPaper.clear();
+      tab4.hitMapPaper.draw(iteration);
+    }
+    tab4.hitMapPaper.init();
+    
+    function onMouseUp(event) {
+      if ("undefined" === typeof tab4.inputLabels) {
+        return;
+      }
+      $("#hitMap_tab4_CanvasWrapper .floatingPointLabel").remove();
+      var pts = tab4.hitMapPaper.grid;
+      if ("undefined" === typeof pts) {
+        return;
+      }
+      var pos = event.point;
+      var canvasWidth = $("#hitMap_tab4").width();
+      var scale = tab4.hitMapPaper.size.sizeX / canvasWidth;
+      if (tab4.GridDistanceType === "hexagonal_neighbourhood_2d") {
+        var r = tab4.hitMapPaper.size.hex.radius;
+      } else {
+        var r = tab4.hitMapPaper.size.sideLength / 2;
+      }
+      pos.x *= scale;
+      pos.y *= scale;
+      var usedLabels = {};
+      for (var i = 0; i < pts.length; i++) {
+        for (var j = 0; j < pts[i].length; j++) {
+          var ptPos = pts[i][j].position;
+          if (math.distance([pos.x, pos.y], [ptPos.x, ptPos.y]) < r) {
+            var labelTexts = [];
+            if ("undefined" === typeof tab4.hitMapHistory.length === 0 || "undefined" === typeof tab4.hitMapHistory[tab4.hitMapPaper.iteration]) {
+              break;
+            }
+            if ("undefined" === typeof tab4.inputLabels) {
+              var cnt = tab4.hitMapHistory[tab4.hitMapPaper.iteration].counts[i][j];
+              if (cnt > 0) {
+                var language = $("#language_switcher").val().toLowerCase();
+                var languageID = lang_ids[language];
+                var dictionary = lang_strings;
+                if (dictionary.hasOwnProperty(languageID) && "undefined" !== typeof dictionary[languageID].count) {
+                  var countWord = dictionary[languageID].count;
+                } else {
+                  var countWord = "Počet";
+                }
+                labelTexts.push("<span data-translate=\"count\">" + countWord + "</span>: " + cnt);
+              }
+            } else {
+              for (var l = 0; l < tab4.inputLabels.length; l++) {
+                var labelName = tab4.inputLabels[l];
+                if ("undefined" !== typeof usedLabels[labelName]) {
+                  continue;
+                }
+                usedLabels[labelName] = true;
+                var cnt = tab4.hitMapHistory[tab4.hitMapPaper.iteration].labelCounts[labelName][i][j];
+                if (cnt > 0) {
+                  var countryID = labelName.toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
+                  var language = $("#language_switcher").val().toLowerCase();
+                  var languageID = lang_ids[language];
+                  var dictionary = lang_strings;
+                  if (dictionary.hasOwnProperty(languageID) && "undefined" !== typeof dictionary[languageID][countryID]) {
+                    var translatedCountry = dictionary[languageID][countryID];
+                    translatedCountry = '<span data-translate="'+countryID+'">'+translatedCountry+'</span>';
+                  } else {
+                    var translatedCountry = labelName;
+                  }
+
+                  labelTexts.push(translatedCountry);
+                }
+              }
+            }
+            if (labelTexts.length > 0) {
+              labelText = labelTexts.join(", ");
+              tab4.hitMapPaper.ptLabel = $('<span class="floatingPointLabel">'+labelText+'</span>')
+                .appendTo($("#hitMap_tab4_CanvasWrapper"))
+                .css("top", +event.point.y)
+                .css("left", +event.point.x);
+              var curTabID = "tab4";
+              if ("undefined" === window[curTabID].labelTimeoutHandle) {
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              if (window[curTabID].labelTimeoutHandle !== false) {
+                clearTimeout(window[curTabID].labelTimeoutHandle);
+                window[curTabID].labelTimeoutHandle = false;
+              }
+              window[curTabID].labelTimeoutHandle = setTimeout(function() {
+                $("#hitMap_"+curTabID+"_CanvasWrapper .floatingPointLabel").remove();
+              }, labelTimeout);
+            }
+            break;
+          }
+        }
+      }
+    }
+  </script>
+  
+  <script type="text/paperscript" canvas="changeRate_tab4">
+    tab4.changeRatePaper = {};
+    tab4.changeRatePaper.changeRatePoints = [];
+    tab4.changeRatePaper.height = 100;
+    tab4.changeRatePaper.width = 500;
+    view.viewSize = new paper.Size(tab4.changeRatePaper.width, tab4.changeRatePaper.height);
+    tab4.changeRatePaper.scaleY = 1;
+    tab4.changeRatePaper.scaleX = 1;
+    tab4.changeRatePaper.path = new Path();
+    tab4.changeRatePaper.path.strokeColor = 'red';
+//     tab4.changeRatePaper.verticalLine = new Path();
+    tab4.changeRatePaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab4.changeRatePaper.height));
+    tab4.changeRatePaper.verticalLine.strokeColor = 'black';
+    tab4.changeRatePaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab4.changeRatePaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab4.changeRatePaper.intersectionLabel.justification = 'center';
+    tab4.changeRatePaper.intersectionLabel.fillColor = 'black';
+    tab4.changeRatePaper.intersectionLabel.content = '';
+    tab4.changeRatePaper.intersectionLabel.fontSize = '14px';
+    
+    tab4.changeRatePaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      if ("number" === typeof content) {
+        if (content < 1) {
+          content = math.round(content, tab4.changeRateThreshold);
+        } else {
+          content = math.round(content, 2);
+        }
+      }
+      tab4.changeRatePaper.intersectionLabel.content = content;
+      tab4.changeRatePaper.intersectionLabel.position.x = x;
+      tab4.changeRatePaper.intersectionLabel.position.y = y;
+      var bounds = tab4.changeRatePaper.intersectionLabel.getBounds();
+      if (x > tab4.changeRatePaper.width/2) {
+        tab4.changeRatePaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab4.changeRatePaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab4.changeRatePaper.height/2) {
+        tab4.changeRatePaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab4.changeRatePaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab4.changeRatePaper.clear = function() {
+      tab4.changeRatePaper.verticalLine.position.x = 0;
+      while (tab4.changeRatePaper.path.segments.length > 0) {
+        tab4.changeRatePaper.path.segments[0].remove();
+      }
+      tab4.changeRatePaper.changeRatePoints = [];
+      tab4.changeRatePaper.intersection.position.x = 0;
+      tab4.changeRatePaper.intersection.position.y = 0;
+      tab4.changeRatePaper.setIntersectionLabel('', 0, 0);
+    }
+    tab4.changeRatePaper.redraw = function() {
+      tab4.changeRatePaper.clear();
+      tab4.changeRatePaper.max = math.max(tab4.changeRateHistory);
+      tab4.changeRatePaper.scaleX = tab4.changeRatePaper.width / tab4.maxIterations;
+      tab4.changeRatePaper.scaleY = tab4.changeRatePaper.height / tab4.changeRatePaper.max;
+      tab4.changeRatePaper.verticalLine.position.x = (tab4.changeRateHistory.length-1) * tab4.changeRatePaper.scaleX;
+      for (var i = 0; i < tab4.changeRateHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab4.changeRatePaper.changeRatePoints[iter]
+            && "undefined" !== typeof tab4.changeRateHistory[iter]) {
+          var x = iter * tab4.changeRatePaper.scaleX;
+          var y = tab4.changeRatePaper.scaleY * (tab4.changeRatePaper.max - tab4.changeRateHistory[iter]);
+          tab4.changeRatePaper.path.add(new Point(x, y));
+          tab4.changeRatePaper.changeRatePoints[iter] = iter;
+          tab4.changeRatePaper.setIntersectionLabel(
+            tab4.changeRateHistory[iter],
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab4.changeRatePaper.showIteration = function(iteration) {
+      tab4.changeRatePaper.verticalLine.position.x = iteration * tab4.changeRatePaper.scaleX;
+      var intersections = tab4.changeRatePaper.verticalLine.getIntersections(tab4.changeRatePaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab4.changeRatePaper.intersection.position.x = intersections[0].point.x;
+        tab4.changeRatePaper.intersection.position.y = intersections[0].point.y;
+        tab4.changeRatePaper.setIntersectionLabel(
+          tab4.changeRateHistory[iteration],
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab4.doIterate) {
+          return;
+        }
+        if (tab4.changeRateHistory.length > 1) {
+          tab4.changeRatePaper.max = math.max(tab4.changeRateHistory);
+          tab4.changeRatePaper.scaleX = tab4.changeRatePaper.width / tab4.maxIterations;
+          tab4.changeRatePaper.scaleY = tab4.changeRatePaper.height / tab4.changeRatePaper.max;
+//           var iter = tab4.somIteration - 1;
+          for (var iter = tab4.changeRatePaper.changeRatePoints.length - 1; iter < tab4.changeRateHistory.length; iter++) {
+            if ("undefined" === typeof tab4.changeRatePaper.changeRatePoints[iter]
+                && "undefined" !== typeof tab4.changeRateHistory[iter]) {
+              var x = iter * tab4.changeRatePaper.scaleX;
+              var y = tab4.changeRatePaper.scaleY * (tab4.changeRatePaper.max - tab4.changeRateHistory[iter]);
+              tab4.changeRatePaper.verticalLine.position.x = x;
+              tab4.changeRatePaper.path.add(new Point(x, y));
+              tab4.changeRatePaper.changeRatePoints[iter] = iter;
+              tab4.changeRatePaper.intersection.position.x = x;
+              tab4.changeRatePaper.intersection.position.y = y;
+              tab4.changeRatePaper.setIntersectionLabel(
+                tab4.changeRateHistory[iter],
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+  <script type="text/paperscript" canvas="neighbourhoodRadius_tab4">
+    tab4.neighbourhoodRadiusPaper = {};
+    tab4.neighbourhoodRadiusPaper.points = [];
+    tab4.neighbourhoodRadiusPaper.height = 100;
+    tab4.neighbourhoodRadiusPaper.width = 500;
+    view.viewSize = new paper.Size(tab4.neighbourhoodRadiusPaper.width, tab4.neighbourhoodRadiusPaper.height);
+    tab4.neighbourhoodRadiusPaper.scaleY = 1;
+    tab4.neighbourhoodRadiusPaper.scaleX = 1;
+    tab4.neighbourhoodRadiusPaper.path = new Path();
+    tab4.neighbourhoodRadiusPaper.path.strokeColor = 'red';
+//     tab4.neighbourhoodRadiusPaper.verticalLine = new Path();
+    tab4.neighbourhoodRadiusPaper.verticalLine = new Path.Line(new Point(0,0), new Point (0,tab4.neighbourhoodRadiusPaper.height));
+    tab4.neighbourhoodRadiusPaper.verticalLine.strokeColor = 'black';
+    tab4.neighbourhoodRadiusPaper.intersection = new Path.Circle({
+      center: new Point(0,0),
+      radius: 3,
+      fillColor: '#009dec'
+    });
+    tab4.neighbourhoodRadiusPaper.intersectionLabel = new PointText(new Point(0, 0));
+    tab4.neighbourhoodRadiusPaper.intersectionLabel.justification = 'center';
+    tab4.neighbourhoodRadiusPaper.intersectionLabel.fillColor = 'black';
+    tab4.neighbourhoodRadiusPaper.intersectionLabel.content = '';
+    tab4.neighbourhoodRadiusPaper.intersectionLabel.fontSize = '14px';
+    
+    tab4.neighbourhoodRadiusPaper.setIntersectionLabel = function(content, x, y) {
+      y = 0;
+      tab4.neighbourhoodRadiusPaper.intersectionLabel.content = content;
+      tab4.neighbourhoodRadiusPaper.intersectionLabel.position.x = x;
+      tab4.neighbourhoodRadiusPaper.intersectionLabel.position.y = y;
+      var bounds = tab4.neighbourhoodRadiusPaper.intersectionLabel.getBounds();
+      if (x > tab4.neighbourhoodRadiusPaper.width/2) {
+        tab4.neighbourhoodRadiusPaper.intersectionLabel.position.x -= bounds.width;
+      } else {
+        tab4.neighbourhoodRadiusPaper.intersectionLabel.position.x += bounds.width;
+      }
+      if (y > tab4.neighbourhoodRadiusPaper.height/2) {
+        tab4.neighbourhoodRadiusPaper.intersectionLabel.position.y -= bounds.height;
+      } else {
+        tab4.neighbourhoodRadiusPaper.intersectionLabel.position.y += bounds.height;
+      }
+    }
+    
+    tab4.neighbourhoodRadiusPaper.clear = function() {
+      tab4.neighbourhoodRadiusPaper.verticalLine.position.x = 0;
+      while (tab4.neighbourhoodRadiusPaper.path.segments.length > 0) {
+        tab4.neighbourhoodRadiusPaper.path.segments[0].remove();
+      }
+      tab4.neighbourhoodRadiusPaper.points = [];
+      tab4.neighbourhoodRadiusPaper.intersection.position.x = 0;
+      tab4.neighbourhoodRadiusPaper.intersection.position.y = 0;
+      tab4.neighbourhoodRadiusPaper.setIntersectionLabel('', 0, 0);
+    }
+    tab4.neighbourhoodRadiusPaper.redraw = function() {
+      tab4.neighbourhoodRadiusPaper.clear();
+      tab4.neighbourhoodRadiusPaper.max = tab4.mapRadius+1;
+      tab4.neighbourhoodRadiusPaper.scaleX = tab4.neighbourhoodRadiusPaper.width / tab4.maxIterations;
+      tab4.neighbourhoodRadiusPaper.scaleY = tab4.neighbourhoodRadiusPaper.height / tab4.neighbourhoodRadiusPaper.max;
+      tab4.neighbourhoodRadiusPaper.verticalLine.position.x = (tab4.bmuHistory.length-1) * tab4.neighbourhoodRadiusPaper.scaleX;
+      for (var i = 0; i < tab4.bmuHistory.length; i++) {
+        var iter = i;
+        if ("undefined" === typeof tab4.neighbourhoodRadiusPaper.points[iter]
+            && "undefined" !== typeof tab4.bmuHistory[iter]) {
+          var x = iter * tab4.neighbourhoodRadiusPaper.scaleX;
+          var y = tab4.neighbourhoodRadiusPaper.scaleY * (tab4.neighbourhoodRadiusPaper.max - tab4.bmuHistory[iter].neighbourhoodRadius);
+          tab4.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+          tab4.neighbourhoodRadiusPaper.points[iter] = iter;
+          tab4.neighbourhoodRadiusPaper.setIntersectionLabel(
+            tab4.bmuHistory[iter].neighbourhoodRadius,
+            x,
+            y
+          );
+        }
+      }
+    }
+    tab4.neighbourhoodRadiusPaper.showIteration = function(iteration) {
+      tab4.neighbourhoodRadiusPaper.verticalLine.position.x = iteration * tab4.neighbourhoodRadiusPaper.scaleX;
+      var intersections = tab4.neighbourhoodRadiusPaper.verticalLine.getIntersections(tab4.neighbourhoodRadiusPaper.path);
+      if (intersections.length > 0 && "undefined" !== typeof intersections[0]) {
+        tab4.neighbourhoodRadiusPaper.intersection.position.x = intersections[0].point.x;
+        tab4.neighbourhoodRadiusPaper.intersection.position.y = intersections[0].point.y;
+        tab4.neighbourhoodRadiusPaper.setIntersectionLabel(
+          tab4.bmuHistory[iteration].neighbourhoodRadius,
+          intersections[0].point.x,
+          intersections[0].point.y
+        );
+      }
+    }
+        
+    function onFrame(event) {
+      try {
+        if (!tab4.doIterate) {
+          return;
+        }
+        if (tab4.bmuHistory.length > 1) {
+          tab4.neighbourhoodRadiusPaper.max = tab4.mapRadius+1;
+          tab4.neighbourhoodRadiusPaper.scaleX = tab4.neighbourhoodRadiusPaper.width / tab4.maxIterations;
+          tab4.neighbourhoodRadiusPaper.scaleY = tab4.neighbourhoodRadiusPaper.height / tab4.neighbourhoodRadiusPaper.max;
+//           var iter = tab4.somIteration - 1;
+          for (var iter = tab4.neighbourhoodRadiusPaper.points.length - 1; iter < tab4.bmuHistory.length; iter++) {
+            if ("undefined" === typeof tab4.neighbourhoodRadiusPaper.points[iter]
+                && "undefined" !== typeof tab4.bmuHistory[iter]) {
+              var x = iter * tab4.neighbourhoodRadiusPaper.scaleX;
+              var y = tab4.neighbourhoodRadiusPaper.scaleY * (tab4.neighbourhoodRadiusPaper.max - tab4.bmuHistory[iter].neighbourhoodRadius);
+              tab4.neighbourhoodRadiusPaper.verticalLine.position.x = x;
+              tab4.neighbourhoodRadiusPaper.path.add(new Point(x, y));
+              tab4.neighbourhoodRadiusPaper.points[iter] = iter;
+              tab4.neighbourhoodRadiusPaper.intersection.position.x = x;
+              tab4.neighbourhoodRadiusPaper.intersection.position.y = y;
+              tab4.neighbourhoodRadiusPaper.setIntersectionLabel(
+                tab4.bmuHistory[iter].neighbourhoodRadius,
+                x,
+                y
+              );
+            }
+          }
+        } else {
+          return;
+        }
+      } catch(e) {
+        console.warn(e);
+      }
+    }
+  </script>
+
+</head>
+<body>
+  <div class="container mainHeader">
+    <h2 data-translate="title">Samoorganizujúce sa mapy a ich aplikácie</h2>
+    <select id="language_switcher" class="form-control">
+      <option selected="selected">Slovenčina</option>
+      <option>English</option>
+    </select>
+  </div>
+  <div class="container tabContainer">
+    <ul  class="nav nav-pills">
+      <li class="active">
+        <a  href="#tab1" data-toggle="tab" data-translate="tab1name">Body (2D)</a>
+      </li>
+      <li class="">
+        <a href="#tab2" data-toggle="tab" data-translate="tab2name">Farby (3D)</a>
+      </li>
+      <li class="">
+        <a href="#tab3" data-toggle="tab" data-translate="tab3name">Iris Flower Data (4D)</a>
+      </li>
+      <li class="">
+        <a href="#tab4" data-toggle="tab" data-translate="tab4name">Reálne populačné indikátory (6D)</a>
+      </li>
+    </ul>
+
+    <div class="tab-content clearfix">
+      <div class="tab-pane active" id="tab1">
+        <p>
+          <span data-translate="tab1inputs"><strong>Vstupy</strong>: 2D body rozložené podľa vybraného rozloženia (viď nižšie).</span>
+          <span data-translate="tab1som"><strong>Uzly siete SOM</strong>: náhodne rozložené 2D body.</span>
+        </p>
+        <div class="inputSelectorWrapper">
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <!--dropdown for input shape-->
+              <label for="const_InputShape" data-translate="tab1InputShapeLabel">Tvar <span class="inputPointsStyle">vstupnej množiny</span>:</label>
+              <select id="const_InputShape" class="form-control">
+                <option value="kruznica_rovnomerne" data-translate="inputShapeRegCircle">Kružnica, rovnomerne rozl.</option>
+                <option value="kruznica_nerovnomerne" data-translate="inputShapeIrregCircle">Kružnica, nerovnomerne rozl.</option>
+                <option value="kruh_nerovnomerne" data-translate="inputShapeCircle">Kruh, nerovnomerne rozl.</option>
+                <option value="stvorec" data-translate="inputShapeSquare">Štvorec, nerovnomerne rozl.</option>
+                <option value="mriezka" data-translate="inputShapeSquareGrid">Štvorcová mriežka</option>
+                <option value="2zhluky" data-translate="inputShape2clusters">2 náhodné zhluky bodov</option>
+                <option value="3zhluky" data-translate="inputShape3clusters">3 náhodné zhluky bodov</option>
+                <option value="4zhluky" data-translate="inputShape4clusters">4 náhodné zhluky bodov</option>
+                <option value="random_pts" data-translate="inputShapeRandom">Náhodné body (rovnaký počet ako SOM)</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_InputSelectionType" data-translate="tab1InputSelection">Výber zo <span class="inputPointsStyle">vstupnej množiny</span>:</label>
+              <select id="const_InputSelectionType" class="form-control">
+                <option value="0" data-translate="systematic">Systematický</option>
+                <option value="1" selected="selected" data-translate="random">Náhodný</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_somH" data-translate="gridSize">Veľkosť mriežky (šírka = výška):</label>
+              <input id="const_somH" class="somConstants" data-slider-id='const_somHSlider' type="text" data-slider-min="1" data-slider-max="40" data-slider-step="1" data-slider-value="15" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_somInitRange" data-translate="initRange">Rozsah hodnôt súradníc váh pri inicializácii SOM:</label>
+              <input id="const_somInitRange" class="somConstants" data-slider-id='const_somInitRangeSlider' type="text" data-slider-min="0" data-slider-max="20" data-slider-step="0.1" data-slider-value="[0,10]" data-slider-enabled="true" data-slider-tooltip-split="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_0" data-translate="learningRate">Miera učenia (na zač.):</label>
+              <input id="const_LearningRate_0" class="somConstants" data-slider-id='const_LearningRate_0Slider' type="text" data-slider-min="0.001" data-slider-max="1" data-slider-step="0.001" data-slider-value="0.2" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate" data-translate="learningFunction">Funkcia miery učenia:</label>
+              <select id="const_LearningRate" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_Theta" data-translate="theta">Theta - závislosť učenia od vzdialenosti uzla od BMU:</label>
+              <select id="const_Theta" class="form-control">
+                <option value="gaussianDecay" data-translate="gaussianDecay">Gaussián [e^(-t^2)]</option>
+                <option value="gaussianDecayWithRepulsion" data-translate="gaussianDecayWithRepulsion">Gaussián s odpudzovaním na okrajoch [(1 - t^2) * e^(-t^2)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+                <option value="uniform" data-translate="uniformDecayWithRepulsion">Rovnomerný pokles s odpudzovaním na okrajoch [1 - 1.1*x/i_max]</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_NeighbourhoodRadius" data-translate="neighbourhoodRadius">Počítanie polomeru okolia BMU:</label>
+              <select id="const_NeighbourhoodRadius" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_GridDistance" data-translate="metrics">Metrika (vzdialenosť) v mriežke:</label>
+              <select id="const_GridDistance" class="form-control">
+                <option value="euclid" data-translate="euclid">Euklidovská (kruhové okolie) [d(a,b) = sqrt( Sum_i( (b - a)_i^2) )]</option>
+                <option value="taxicab" data-translate="taxicab">Taxikárska (kosoštvorcové okolie) [d(a,b) = Sum_i( (b - a)_i )]</option>
+                <option value="max" data-translate="chebyshev">Chebyshevova / maximová (štvorcové okolie) [d(a,b) = max_i( (b - a)_i) ]</option>
+                <option value="hexagonal_neighbourhood_2d" data-translate="hexagonal">(Šesťuholníkové okolie)</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_changeRateThreshold" data-translate="stopCond">Podmienka ukončenia (<code>&sum;(zmien) &lt; 10<sup>(-hodnota)</sup></code>):</label>
+              <input id="const_changeRateThreshold" class="somConstants" data-slider-id='const_changeRateThresholdSlider' type="text" data-slider-min="2" data-slider-max="15" data-slider-step="1" data-slider-value="7" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_maxIterations" data-translate="iterationNumber">Počet iterácií:</label>
+              <input id="const_maxIterations" class="somConstants" data-slider-id='const_maxIterationsSlider' type="text" data-slider-min="100" data-slider-max="10000" data-slider-step="100" data-slider-value="1000" data-slider-enabled="true"/>
+            </div>
+          </div>
+<!--           <span class="small"><i class="fa fa-info-circle"></i> * V skutočnosti používame štvorec euklidovskej vzdialenosti, keďže odmocnina je náročná aritmetická operácia a vzdialenosti používame na porovnávanie, vzdialenosť ako takú k výpočtu nepotrebujeme.</span> -->
+        </div>
+        <div class="canvasWrapper">
+          <p class="somTrainingHeader header">
+            <span data-translate="trainHeader">Trénovanie <span class="somPointsStyle">SOM</span> a "hit map"</span><span>:</span>
+          </p>
+          <p class="button">
+            <button id="resetSomButton" class="btn btn-danger" disabled="disabled"><i class="fa fa-undo"></i></button>
+            <button id="trainSomButton" class="btn btn-success"><i class="fa fa-play"></i></button>
+            <button id="trainStopSomButton" class="btn btn-danger" disabled="disabled"><i class="fa fa-stop"></i></button>
+            <span id="counter" class="counter btn "><i class="fa fa-clock-o fa-lg"></i><span>0</span></span>
+          </p>
+          <p class="showBmuAndNeighbourhoodCheckboxP header">
+            <label>
+              <input id="showBmuAndNeighbourhoodCheckbox" class="showBmuAndNeighbourhoodCheckbox" data-tab="tab1" type="checkbox" checked="checked"/>
+              <span data-translate="showBMU">Zobraziť BMU a okolie?</span>
+            </label>
+          </p>
+          <div class="clear"></div>
+          <canvas id="somTraining" keepalive="true"></canvas>
+          <div class="hitMapCanvasWrapper" id="hitMap_tab1_CanvasWrapper">
+            <canvas id="hitMap" keepalive="true"></canvas>
+          </div>
+          <div id="sat_historySliderWrapper">
+            <i class="fa fa-history fa-lg"></i>
+            <input id="sat_historySliderInput" class="sat_historySliderInput" data-slider-id='sat_historySlider' type="text" data-slider-min="0" data-slider-max="0" data-slider-step="1" data-slider-value="0" data-slider-enabled="false"/>
+            <div class="historyImgContainer"></div>
+          </div>
+
+          <div class="clear"></div>
+          <div class="changeRateCanvasWrapper">
+            <h5 data-translate="changeRate">Súčet zmien pre danú iteráciu:</h5>
+            <canvas id="changeRate" keepalive="true"></canvas>
+          </div>
+          <div class="neighbourhoodRadiusCanvasWrapper">
+            <h5 data-translate="neighbourhoodR">Polomer okolia pre danú iteráciu:</h5>
+            <canvas id="neighbourhoodRadius" keepalive="true"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab2">
+        <p>
+          <span data-translate="tab2inputs"><strong>Vstupy</strong>: 3D vektory - RGB hodnoty podľa výberu (viď nižšie).</span>
+          <span data-translate="tab2som"><strong>Uzly siete SOM</strong>: 3D vektory - RGB hodnoty.</span>
+        </p>
+        <div class="inputSelectorWrapper">
+          <div class="constSliderRow">
+            <div class="constSliderWrapper const_InputColors_tab2">
+              <label for="const_InputColors_tab2" data-translate="inputColors">Vstupy - farby:</label>
+              <select id="const_InputColors_tab2" multiple="multiple" data-error-if-empty="true">
+                <option data-label="Biela" value="[1,1,1]">
+                  &lt;span style=&quot;color:rgb(255,255,255);background-color:grey&quot; class=&quot;col-square&quot;&gt;
+                    &lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;
+                  &lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;white&quot;&gt;Biela&lt;/span&gt;
+                </option>
+                <option data-label="Čierna" value="[0,0,0]">
+                  &lt;span style=&quot;color:rgb(0,0,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;black&quot;&gt;Čierna&lt;/span&gt;
+                </option>
+                <option data-label="Červená" value="[1,0,0]">
+                  &lt;span style=&quot;color:rgb(255,0,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;red&quot;&gt;Červená&lt;/span&gt;
+                </option>
+                <option data-label="Zelená" value="[0,1,0]">
+                  &lt;span style=&quot;color:rgb(0,255,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;green&quot;&gt;Zelená&lt;/span&gt;
+                </option>
+                <option data-label="Modrá" value="[0,0,1]">
+                  &lt;span style=&quot;color:rgb(0,0,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;blue&quot;&gt;Modrá&lt;/span&gt;
+                </option>
+                <option data-label="Žltá" value="[1,1,0]">
+                  &lt;span style=&quot;color:rgb(255,255,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;yellow&quot;&gt;Žltá&lt;/span&gt;
+                </option>
+                <option data-label="Cyánová" value="[0,1,1]">
+                  &lt;span style=&quot;color:rgb(0,255,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;cyan&quot;&gt;Cyánová&lt;/span&gt;
+                </option>
+                <option data-label="Magenta" value="[1,0,1]">
+                  &lt;span style=&quot;color:rgb(255,0,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;magenta&quot;&gt;Magenta&lt;/span&gt;
+                </option>
+
+                <option data-label="Navy Blue" value="[0,0,0.5]">
+                  &lt;span style=&quot;color:rgb(0,0,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;navyBlue&quot;&gt;Navy Blue&lt;/span&gt;
+                </option>
+                <option data-label="Zelená (2)" value="[0,0.5,0]">
+                  &lt;span style=&quot;color:rgb(0,128,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;green2&quot;&gt;Zelená (2)&lt;/span&gt;
+                </option>
+                <option data-label="Teal" value="[0,0.5,0.5]">
+                  &lt;span style=&quot;color:rgb(0,128,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;teal&quot;&gt;Teal&lt;/span&gt;
+                </option>
+                <option data-label="" value="[0,0.5,1]">
+                  &lt;span style=&quot;color:rgb(0,128,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[0,1,0.5]">
+                  &lt;span style=&quot;color:rgb(0,255,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="Maroon" value="[0.5,0,0]">
+                  &lt;span style=&quot;color:rgb(128,0,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;maroon&quot;&gt;Maroon&lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,0,0.5]">
+                  &lt;span style=&quot;color:rgb(128,0,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,0,1]">
+                  &lt;span style=&quot;color:rgb(128,0,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="Olive" value="[0.5,0.5,0]">
+                  &lt;span style=&quot;color:rgb(128,128,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;olive&quot;&gt;Olivová&lt;/span&gt;
+                </option>
+                <option data-label="Gray" value="[0.5,0.5,0.5]">
+                  &lt;span style=&quot;color:rgb(128,128,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot; data-translate=&quot;gray&quot;&gt;Šedá&lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,0.5,1]">
+                  &lt;span style=&quot;color:rgb(128,128,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,1,0]">
+                  &lt;span style=&quot;color:rgb(128,255,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,1,0.5]">
+                  &lt;span style=&quot;color:rgb(128,255,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[0.5,1,1]">
+                  &lt;span style=&quot;color:rgb(128,255,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[1,0,0.5]">
+                  &lt;span style=&quot;color:rgb(255,0,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[1,0.5,0]">
+                  &lt;span style=&quot;color:rgb(255,128,0);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[1,0.5,0.5]">
+                  &lt;span style=&quot;color:rgb(255,128,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[1,0.5,1]">
+                  &lt;span style=&quot;color:rgb(255,128,255);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+                <option data-label="" value="[1,1,0.5]">
+                  &lt;span style=&quot;color:rgb(255,255,128);&quot; class=&quot;col-square&quot;&gt;&lt;i class=&quot;fa fa-square&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+                  &lt;span class=&quot;hidden title&quot;&gt;   &lt;/span&gt;
+                </option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_InputSelectionType_tab2" data-translate="inSel">Výber zo vstupnej množiny:</label>
+              <select id="const_InputSelectionType_tab2" class="form-control">
+                <option value="0" data-translate="systematic">Systematický</option>
+                <option value="1" selected="selected" data-translate="random">Náhodný</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_somH_tab2" data-translate="gridSize">Veľkosť mriežky (šírka = výška):</label>
+              <input id="const_somH_tab2" class="somConstants" data-slider-id='const_somHSlider_tab2' type="text" data-slider-min="1" data-slider-max="40" data-slider-step="1" data-slider-value="15" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_somInitRange_tab2" data-translate="initRange">Rozsah hodnôt súradníc váh pri inicializácii SOM:</label>
+              <input id="const_somInitRange_tab2" class="somConstants" data-slider-id='const_somInitRangeSlider_tab2' type="text" data-slider-min="0" data-slider-max="1" data-slider-step="0.01" data-slider-value="[0,1]" data-slider-enabled="true" data-slider-tooltip-split="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_0_tab2" data-translate="learningRate">Miera učenia (na zač.):</label>
+              <input id="const_LearningRate_0_tab2" class="somConstants" data-slider-id='const_LearningRate_0Slider_tab2' type="text" data-slider-min="0.001" data-slider-max="1" data-slider-step="0.001" data-slider-value="0.2" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_tab2" data-translate="learningFunction">Funkcia miery učenia:</label>
+              <select id="const_LearningRate_tab2" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_Theta_tab2" data-translate="theta">Theta - závislosť učenia od vzdialenosti uzla od BMU:</label>
+              <select id="const_Theta_tab2" class="form-control">
+                <option value="gaussianDecay" data-translate="gaussianDecay">Gaussián [e^(-t^2)]</option>
+                <option value="gaussianDecayWithRepulsion" data-translate="gaussianDecayWithRepulsion">Gaussián s odpudzovaním na okrajoch [(1 - t^2) * e^(-t^2)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+                <option value="uniform" data-translate="uniformDecayWithRepulsion">Rovnomerný pokles s odpudzovaním na okrajoch [1 - 1.1*x/i_max]</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_NeighbourhoodRadius_tab2" data-translate="neighbourhoodRadius">Počítanie polomeru okolia BMU:</label>
+              <select id="const_NeighbourhoodRadius_tab2" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_GridDistance_tab2" data-translate="metrics">Metrika (vzdialenosť) v mriežke:</label>
+              <select id="const_GridDistance_tab2" class="form-control">
+                <option value="euclid" data-translate="euclid">Euklidovská (kruhové okolie) [d(a,b) = sqrt( Sum_i( (b - a)_i^2) )]</option>
+                <option value="taxicab" data-translate="taxicab">Taxikárska (kosoštvorcové okolie) [d(a,b) = Sum_i( (b - a)_i )]</option>
+                <option value="max" data-translate="chebyshev">Chebyshevova / maximová (štvorcové okolie) [d(a,b) = max_i( (b - a)_i) ]</option>
+                <option value="hexagonal_neighbourhood_2d" data-translate="hexagonal">(Šesťuholníkové okolie)</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_changeRateThreshold_tab2" data-translate="stopCond">Podmienka ukončenia (<code>&sum;(zmien) &lt; 10<sup>(-hodnota)</sup></code>):</label>
+              <input id="const_changeRateThreshold_tab2" class="somConstants" data-slider-id='const_changeRateThresholdSlider_tab2' type="text" data-slider-min="2" data-slider-max="15" data-slider-step="1" data-slider-value="7" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_maxIterations_tab2" data-translate="iterationNumber">Počet iterácií:</label>
+              <input id="const_maxIterations_tab2" class="somConstants" data-slider-id='const_maxIterationsSlider_tab2' type="text" data-slider-min="100" data-slider-max="10000" data-slider-step="100" data-slider-value="1000" data-slider-enabled="true"/>
+            </div>
+          </div>
+        </div>
+        <div class="canvasWrapper">
+          <p class="somTrainingHeader header">
+            <span data-translate="trainSomHitMap">Trénovanie SOM a "hit map"</span><span>:</span>
+          </p>
+          <p class="button">
+            <button id="resetSomButton_tab2" class="btn btn-danger" disabled="disabled"><i class="fa fa-undo"></i></button>
+            <button id="trainSomButton_tab2" class="btn btn-success"><i class="fa fa-play"></i></button>
+            <button id="trainStopSomButton_tab2" class="btn btn-danger" disabled="disabled"><i class="fa fa-stop"></i></button>
+            <span id="counter_tab2" class="counter btn "><i class="fa fa-clock-o fa-lg"></i><span>0</span></span>
+          </p>
+          <p class="showBmuAndNeighbourhoodCheckboxP header">
+            <label>
+              <input id="showBmuAndNeighbourhoodCheckbox_tab2" class="showBmuAndNeighbourhoodCheckbox" data-tab="tab2" type="checkbox" checked="checked"/>
+              <span data-translate="showBMU">Zobraziť BMU a okolie?</span>
+            </label>
+          </p>
+          <div class="clear"></div>
+          <canvas id="somTraining_tab2" keepalive="true"></canvas>
+          <div class="hitMapCanvasWrapper" id="hitMap_tab2_CanvasWrapper">
+            <canvas id="hitMap_tab2" keepalive="true"></canvas>
+          </div>
+          <div id="sat_historySliderWrapper_tab2">
+            <i class="fa fa-history fa-lg"></i>
+            <input id="sat_historySliderInput_tab2" class="sat_historySliderInput" data-slider-id='sat_historySlider_tab2' type="text" data-slider-min="0" data-slider-max="0" data-slider-step="1" data-slider-value="0" data-slider-enabled="false"/>
+            <div class="historyImgContainer"></div>
+            <div class="clear"></div>
+            <div class="changeRateCanvasWrapper">
+              <h5 data-translate="changeRate">Súčet zmien pre danú iteráciu:</h5>
+              <canvas id="changeRate_tab2" keepalive="true"></canvas>
+            </div>
+            <div class="neighbourhoodRadiusCanvasWrapper">
+              <h5 data-translate="neighbourhoodR">Polomer okolia pre danú iteráciu:</h5>
+              <canvas id="neighbourhoodRadius_tab2" keepalive="true"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab3">
+        <p>
+          <span data-translate="tab3inputs"><strong>Vstupy</strong>: 150 4D vektorov: štyry charakteristicky (šírka, dĺžka okvetných a kališných lístkov) namerané na 150 kvetoch Iris (50 <span style="color: green;">Iris Setosa</span>, 50 <span style="color: red;">Iris Virginica</span>, 50 <span style="color: blue;">Iris Versicolor</span>).</span>
+          <span data-translate="tab3som"><strong>Uzly siete SOM</strong>: 4D vektory.</span>
+        </p>
+        <div class="inputSelectorWrapper">
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_InputSelectionType_tab3" data-translate="inSel">Výber zo vstupnej množiny:</label>
+              <select id="const_InputSelectionType_tab3" class="form-control">
+                <option value="0" data-translate="systematic">Systematický</option>
+                <option value="1" selected="selected" data-translate="random">Náhodný</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_somH_tab3" data-translate="gridSize">Veľkosť mriežky (šírka = výška):</label>
+              <input id="const_somH_tab3" class="somConstants" data-slider-id='const_somHSlider_tab3' type="text" data-slider-min="1" data-slider-max="20" data-slider-step="1" data-slider-value="10" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_0_tab3" data-translate="learningRate">Miera učenia (na zač.):</label>
+              <input id="const_LearningRate_0_tab3" class="somConstants" data-slider-id='const_LearningRate_0Slider_tab3' type="text" data-slider-min="0.001" data-slider-max="1" data-slider-step="0.001" data-slider-value="0.2" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_tab3" data-translate="learningFunction">Funkcia miery učenia:</label>
+              <select id="const_LearningRate_tab3" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_Theta_tab3" data-translate="theta">Theta - závislosť učenia od vzdialenosti uzla od BMU:</label>
+              <select id="const_Theta_tab3" class="form-control">
+                <option value="gaussianDecay" data-translate="gaussianDecay">Gaussián [e^(-t^2)]</option>
+                <option value="gaussianDecayWithRepulsion" data-translate="gaussianDecayWithRepulsion">Gaussián s odpudzovaním na okrajoch [(1 - t^2) * e^(-t^2)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+                <option value="uniform" data-translate="uniformDecayWithRepulsion">Rovnomerný pokles s odpudzovaním na okrajoch [1 - 1.1*x/i_max]</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_NeighbourhoodRadius_tab3" data-translate="neighbourhoodRadius">Počítanie polomeru okolia BMU:</label>
+              <select id="const_NeighbourhoodRadius_tab3" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_GridDistance_tab3" data-translate="metrics">Metrika (vzdialenosť) v mriežke:</label>
+              <select id="const_GridDistance_tab3" class="form-control">
+                <option value="euclid" data-translate="euclid">Euklidovská (kruhové okolie) [d(a,b) = sqrt( Sum_i( (b - a)_i^2) )]</option>
+                <option value="taxicab" data-translate="taxicab">Taxikárska (kosoštvorcové okolie) [d(a,b) = Sum_i( (b - a)_i )]</option>
+                <option value="max" data-translate="chebyshev">Chebyshevova / maximová (štvorcové okolie) [d(a,b) = max_i( (b - a)_i) ]</option>
+                <option value="hexagonal_neighbourhood_2d" data-translate="hexagonal">(Šesťuholníkové okolie)</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_changeRateThreshold_tab3" data-translate="stopCond">Podmienka ukončenia (<code>&sum;(zmien) &lt; 10<sup>(-hodnota)</sup></code>):</label>
+              <input id="const_changeRateThreshold_tab3" class="somConstants" data-slider-id='const_changeRateThresholdSlider_tab3' type="text" data-slider-min="2" data-slider-max="15" data-slider-step="1" data-slider-value="7" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_maxIterations_tab3" data-translate="iterationNumber">Počet iterácií:</label>
+              <input id="const_maxIterations_tab3" class="somConstants" data-slider-id='const_maxIterationsSlider_tab3' type="text" data-slider-min="100" data-slider-max="10000" data-slider-step="100" data-slider-value="1000" data-slider-enabled="true"/>
+            </div>
+          </div>
+        </div>
+        <div class="canvasWrapper">
+          <p class="somTrainingHeader header">
+            <span data-translate="trainSomHitMap">Trénovanie SOM a "hit map"</span><span>:</span>
+          </p>
+          <p class="button">
+            <button id="resetSomButton_tab3" class="btn btn-danger" disabled="disabled"><i class="fa fa-undo"></i></button>
+            <button id="trainSomButton_tab3" class="btn btn-success"><i class="fa fa-play"></i></button>
+            <button id="trainStopSomButton_tab3" class="btn btn-danger" disabled="disabled"><i class="fa fa-stop"></i></button>
+            <span id="counter_tab3" class="counter btn "><i class="fa fa-clock-o fa-lg"></i><span>0</span></span>
+          </p>
+          <p class="showBmuAndNeighbourhoodCheckboxP header">
+            <label>
+              <input id="showBmuAndNeighbourhoodCheckbox_tab3" class="showBmuAndNeighbourhoodCheckbox" data-tab="tab3" type="checkbox"/>
+              <span data-translate="showBMU">Zobraziť BMU a okolie?</span>
+            </label>
+          </p>
+          <div class="clear"></div>
+          <canvas id="somTraining_tab3" keepalive="true"></canvas>
+          <div class="hitMapCanvasWrapper" id="hitMap_tab3_CanvasWrapper">
+            <canvas id="hitMap_tab3" keepalive="true"></canvas>
+          </div>
+          <div id="sat_historySliderWrapper_tab3">
+            <i class="fa fa-history fa-lg"></i>
+            <input id="sat_historySliderInput_tab3" class="sat_historySliderInput" data-slider-id='sat_historySlider_tab3' type="text" data-slider-min="0" data-slider-max="0" data-slider-step="1" data-slider-value="0" data-slider-enabled="false"/>
+            <div class="historyImgContainer"></div>
+            <div class="clear"></div>
+            <div class="changeRateCanvasWrapper">
+              <h5 data-translate="changeRate">Súčet zmien pre danú iteráciu:</h5>
+              <canvas id="changeRate_tab3" keepalive="true"></canvas>
+            </div>
+            <div class="neighbourhoodRadiusCanvasWrapper">
+              <h5 data-translate="neighbourhoodR">Polomer okolia pre danú iteráciu:</h5>
+              <canvas id="neighbourhoodRadius_tab3" keepalive="true"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="tab4">
+        <p>
+          <span data-translate="tab4inputs"><strong>Vstupy</strong>: 6D vektory populačných indikátorov nameraných v 44 krajinách sveta v roku 2014 (zdroj: <a href="http://www.oecd.org/" target="_blank">http://www.oecd.org/</a>). Charakteristiky: 1 - <em>Percento populácie 25+ s dosiahnutým nižším stredným vzdelaním</em>, 2 - <em>Percento populácie 25+ s dosiahnutým vyšším stredným vzdelaním</em>, 3 - <em>Percento nezamestnanej populácie, 4 - <em>Rozdelenie pohlaví: percentuálny pomer počtu mužov k počtu žien</em>, 5 - <em>Percentuálny pomer vekovo závislej populácie (15-, 64+) k pracujúcej populácii, 6 - Natalita</em>. Krajiny: <span id="colored_countries"></span>.</span>
+          <span data-translate="tab4som"><strong>Uzly siete SOM</strong>: 6D vektory.</span>
+        </p>
+        <div class="inputSelectorWrapper">
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_InputSelectionType_tab4" data-translate="inSel">Výber zo vstupnej množiny:</label>
+              <select id="const_InputSelectionType_tab4" class="form-control">
+                <option value="0" data-translate="systematic">Systematický</option>
+                <option value="1" selected="selected" data-translate="random">Náhodný</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_somH_tab4" data-translate="gridSize">Veľkosť mriežky (šírka = výška):</label>
+              <input id="const_somH_tab4" class="somConstants" data-slider-id='const_somHSlider_tab4' type="text" data-slider-min="1" data-slider-max="20" data-slider-step="1" data-slider-value="8" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_0_tab4" data-translate="learningRate">Miera učenia (na zač.):</label>
+              <input id="const_LearningRate_0_tab4" class="somConstants" data-slider-id='const_LearningRate_0Slider_tab4' type="text" data-slider-min="0.001" data-slider-max="1" data-slider-step="0.001" data-slider-value="0.2" data-slider-enabled="true"/>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_LearningRate_tab4" data-translate="learningFunction">Funkcia miery učenia:</label>
+              <select id="const_LearningRate_tab4" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_Theta_tab4" data-translate="theta">Theta - závislosť učenia od vzdialenosti uzla od BMU:</label>
+              <select id="const_Theta_tab4" class="form-control">
+                <option value="gaussianDecay" data-translate="gaussianDecay">Gaussián [e^(-t^2)]</option>
+                <option value="gaussianDecayWithRepulsion" data-translate="gaussianDecayWithRepulsion">Gaussián s odpudzovaním na okrajoch [(1 - t^2) * e^(-t^2)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+                <option value="uniform" data-translate="uniformDecayWithRepulsion">Rovnomerný pokles s odpudzovaním na okrajoch [1 - 1.1*x/i_max]</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_NeighbourhoodRadius_tab4" data-translate="neighbourhoodRadius">Počítanie polomeru okolia BMU:</label>
+              <select id="const_NeighbourhoodRadius_tab4" class="form-control">
+                <option value="expDecay" data-translate="expDecay">Exponenciálny pokles [e^(-t)]</option>
+                <option value="uniform" data-translate="uniformDecay">Rovnomerný pokles [1 - x/i_max]</option>
+              </select>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_GridDistance_tab4" data-translate="metrics">Metrika (vzdialenosť) v mriežke:</label>
+              <select id="const_GridDistance_tab4" class="form-control">
+                <option value="euclid" data-translate="euclid">Euklidovská (kruhové okolie) [d(a,b) = sqrt( Sum_i( (b - a)_i^2) )]</option>
+                <option value="taxicab" data-translate="taxicab">Taxikárska (kosoštvorcové okolie) [d(a,b) = Sum_i( (b - a)_i )]</option>
+                <option value="max" data-translate="chebyshev">Chebyshevova / maximová (štvorcové okolie) [d(a,b) = max_i( (b - a)_i) ]</option>
+                <option value="hexagonal_neighbourhood_2d" data-translate="hexagonal">(Šesťuholníkové okolie)</option>
+              </select>
+            </div>
+            <div class="constSliderWrapper">
+              <label for="const_changeRateThreshold_tab4" data-translate="stopCond">Podmienka ukončenia (<code>&sum;(zmien) &lt; 10<sup>(-hodnota)</sup></code>):</label>
+              <input id="const_changeRateThreshold_tab4" class="somConstants" data-slider-id='const_changeRateThresholdSlider_tab4' type="text" data-slider-min="2" data-slider-max="15" data-slider-step="1" data-slider-value="7" data-slider-enabled="true"/>
+            </div>
+          </div>
+          <div class="constSliderRow">
+            <div class="constSliderWrapper">
+              <label for="const_maxIterations_tab4" data-translate="iterationNumber">Počet iterácií:</label>
+              <input id="const_maxIterations_tab4" class="somConstants" data-slider-id='const_maxIterationsSlider_tab4' type="text" data-slider-min="100" data-slider-max="10000" data-slider-step="100" data-slider-value="1000" data-slider-enabled="true"/>
+            </div>
+          </div>
+<!--           <span class="small"><i class="fa fa-info-circle"></i> * V skutočnosti používame štvorec euklidovskej vzdialenosti, keďže odmocnina je náročná aritmetická operácia a vzdialenosti používame na porovnávanie, vzdialenosť ako takú k výpočtu nepotrebujeme.</span> -->
+        </div>
+        <div class="canvasWrapper">
+          <p class="somTrainingHeader header">
+            <span data-translate="trainSomHitMap">Trénovanie SOM a "hit map"</span><span>:</span>
+          </p>
+          <p class="button">
+            <button id="resetSomButton_tab4" class="btn btn-danger" disabled="disabled"><i class="fa fa-undo"></i></button>
+            <button id="trainSomButton_tab4" class="btn btn-success"><i class="fa fa-play"></i></button>
+            <button id="trainStopSomButton_tab4" class="btn btn-danger" disabled="disabled"><i class="fa fa-stop"></i></button>
+            <span id="counter_tab4" class="counter btn "><i class="fa fa-clock-o fa-lg"></i><span>0</span></span>
+          </p>
+          <p class="showBmuAndNeighbourhoodCheckboxP header">
+            <label>
+              <input id="showBmuAndNeighbourhoodCheckbox_tab4" class="showBmuAndNeighbourhoodCheckbox" data-tab="tab4" type="checkbox"/>
+              <span data-translate="showBMU">Zobraziť BMU a okolie?</span>
+            </label>
+          </p>
+          <div class="clear"></div>
+          <canvas id="somTraining_tab4" keepalive="true"></canvas>
+          <div class="hitMapCanvasWrapper" id="hitMap_tab4_CanvasWrapper">
+            <canvas id="hitMap_tab4" keepalive="true"></canvas>
+          </div>
+          <div id="sat_historySliderWrapper_tab4">
+            <i class="fa fa-history fa-lg"></i>
+            <input id="sat_historySliderInput_tab4" class="sat_historySliderInput" data-slider-id='sat_historySlider_tab4' type="text" data-slider-min="0" data-slider-max="0" data-slider-step="1" data-slider-value="0" data-slider-enabled="false"/>
+            <div class="historyImgContainer"></div>
+            <div class="clear"></div>
+            <div class="changeRateCanvasWrapper">
+              <h5 data-translate="changeRate">Súčet zmien pre danú iteráciu:</h5>
+              <canvas id="changeRate_tab4" keepalive="true"></canvas>
+            </div>
+            <div class="neighbourhoodRadiusCanvasWrapper">
+              <h5 data-translate="neighbourhoodR">Polomer okolia pre danú iteráciu:</h5>
+              <canvas id="neighbourhoodRadius_tab4" keepalive="true"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
